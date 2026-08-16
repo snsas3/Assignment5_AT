@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Access Denied — Green Valley Primary Care Clinic{% endblock %}
+{% block extra_head %}
+<style>
+  .error-page {
+    min-height: calc(100vh - 60px);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 2rem 1.25rem; text-align: center;
+  }
+  .error-code { font-size: 4rem; font-weight: 700; color: var(--destructive); line-height: 1; margin-bottom: 0.5rem; }
+  .error-title { font-size: 1.25rem; font-weight: 600; color: var(--fg); margin-bottom: 0.5rem; }
+  .error-sub { font-size: 0.9rem; color: var(--muted-text); margin-bottom: 1.5rem; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="error-page">
+  <div class="error-code">403</div>
+  <div class="error-title">Access Denied</div>
+  <p class="error-sub">You don't have permission to view this page.</p>
+  <a href="/" class="btn btn-primary">Back to Search</a>
+</div>
+{% endblock %}

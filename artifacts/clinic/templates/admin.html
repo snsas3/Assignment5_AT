@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard — Green Valley Primary Care Clinic{% endblock %}
+{% block nav_search %}{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  .admin-page { padding: 1.75rem 1.25rem 3rem; max-width: 1200px; margin: 0 auto; }
+
+  .admin-hdr { margin-bottom: 1.75rem; }
+  .admin-title { font-size: 1.375rem; font-weight: 700; color: var(--fg); }
+  .admin-sub   { font-size: 0.875rem; color: var(--muted-text); margin-top: 0.25rem; }
+
+  /* Stat cards */
+  .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  .stat-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem 1.5rem; box-shadow: var(--shadow); }
+  .stat-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted-text); margin-bottom: 0.45rem; }
+  .stat-value { font-size: 2.125rem; font-weight: 700; line-height: 1; margin-bottom: 0.3rem; }
+  .stat-card:nth-child(1) .stat-value { color: var(--secondary); }
+  .stat-card:nth-child(2) .stat-value { color: var(--primary); }
+  .stat-card:nth-child(3) .stat-value { color: var(--destructive); }
+  .stat-desc { font-size: 0.75rem; color: var(--muted-text); }
+
+  /* Bottom grid */
+  .bottom-grid { display: grid; grid-template-columns: 1fr 1.65fr; gap: 1.25rem; align-items: start; }
+
+  /* Chart */
+  .chart-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem 1.5rem; box-shadow: var(--shadow); }
+  .chart-wrap { position: relative; height: 215px; }
+  .section-title { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted-text); margin-bottom: 0.9rem; }
+
+  /* Activity log */
+  .activity-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem 1.5rem; box-shadow: var(--shadow); }
+
+  @media (max-width: 900px) {
+    .stats-grid  { grid-template-columns: 1fr 1fr; }
+    .bottom-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 640px) {
+    .admin-page { padding: 1.25rem 1rem 2.5rem; }
+    .stats-grid { grid-template-columns: 1fr; }
+    .stat-value { font-size: 1.75rem; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-page">
+
+  <div class="admin-hdr">
+    <h1 class="admin-title">Admin Dashboard</h1>
+    <p class="admin-sub">Green Valley Primary Care Clinic &nbsp;&middot;&nbsp; Usage &amp; Activity Overview</p>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Total Patients Viewed</div>
+      <div class="stat-value">{{ stats.total_patients_viewed }}</div>
+      <div class="stat-desc">Across all sessions</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Summaries Generated</div>
+      <div class="stat-value">{{ stats.total_summaries_generated }}</div>
+      <div class="stat-desc">AI clinical summaries created</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Failed Generations</div>
+      <div class="stat-value">{{ stats.total_failed_generations }}</div>
+      <div class="stat-desc">{{ "%.1f"|format(stats.total_failed_generations / stats.total_summaries_generated * 100) }}% failure rate</div>
+    </div>
+  </div>
+
+  <!-- Chart + Log -->
+  <div class="bottom-grid">
+
+    <div class="chart-card">
+      <div class="section-title">Summaries Generated Per Day</div>
+      <div class="chart-wrap">
+        <canvas id="summaryChart"></canvas>
+      </div>
+    </div>
+
+    <div class="activity-card">
+      <div class="section-title">Recent Activity Log</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Doctor</th>
+              <th>Patient</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in stats.activity_log %}
+            <tr>
+              <td class="text-sm text-muted" style="white-space:nowrap">{{ row.timestamp }}</td>
+              <td class="text-sm font-semibold">{{ row.doctor }}</td>
+              <td class="text-sm">{{ row.patient }}</td>
+              <td>
+                {% if row.action == "Generated Summary" %}
+                  <span class="badge badge-success">{{ row.action }}</span>
+                {% elif row.action == "Summary Failed" %}
+                  <span class="badge badge-failed">{{ row.action }}</span>
+                {% else %}
+                  <span class="badge badge-viewed">{{ row.action }}</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /bottom-grid -->
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  (function () {
+    var labels = {{ stats.daily_summaries | map(attribute='date')  | list | tojson }};
+    var data   = {{ stats.daily_summaries | map(attribute='count') | list | tojson }};
+
+    function cssVar(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    var chartInstance = null;
+
+    function buildChart() {
+      var ctx = document.getElementById('summaryChart').getContext('2d');
+      var primary    = cssVar('--primary');
+      var cardBorder = cssVar('--card-border');
+      var mutedText  = cssVar('--muted-text');
+
+      return new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Summaries',
+            data: data,
+            backgroundColor: primary + 'cc',
+            borderColor: primary,
+            borderWidth: 1.5,
+            borderRadius: 6,
+            borderSkipped: false,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: 'rgba(0,0,0,0.75)',
+              callbacks: { label: function (ctx) { return ' ' + ctx.parsed.y + ' summaries'; } }
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { color: mutedText, font: { size: 11 } },
+              border: { color: cardBorder }
+            },
+            y: {
+              beginAtZero: true,
+              grid: { color: cardBorder + '88' },
+              ticks: { color: mutedText, font: { size: 11 }, stepSize: 1, precision: 0 },
+              border: { color: 'transparent' }
+            }
+          }
+        }
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      chartInstance = buildChart();
+
+      // Re-render chart on theme toggle so chart colors update
+      var toggle = document.getElementById('themeToggle');
+      if (toggle) {
+        toggle.addEventListener('click', function () {
+          setTimeout(function () {
+            if (chartInstance) { chartInstance.destroy(); }
+            chartInstance = buildChart();
+          }, 50);
+        });
+      }
+    });
+  })();
+</script>
+{% endblock %}

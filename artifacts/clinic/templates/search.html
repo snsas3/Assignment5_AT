@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+{% block title %}Patient Search — Green Valley Primary Care Clinic{% endblock %}
+{% block nav_search %}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .search-hero {
+    min-height: calc(100vh - 60px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 5.5rem 1.25rem 3rem;
+  }
+  .clinic-eyebrow {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--primary);
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .clinic-eyebrow::before, .clinic-eyebrow::after {
+    content: '';
+    display: block;
+    width: 24px;
+    height: 1px;
+    background: var(--primary);
+    opacity: 0.5;
+  }
+  .search-heading {
+    font-size: clamp(1.625rem, 4vw, 2.125rem);
+    font-weight: 700;
+    color: var(--fg);
+    text-align: center;
+    line-height: 1.2;
+    margin-bottom: 0.4rem;
+  }
+  .search-sub {
+    font-size: 0.9375rem;
+    color: var(--muted-text);
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+  .search-box-wrap {
+    width: 100%;
+    max-width: 540px;
+    position: relative;
+    margin-bottom: 0.5rem;
+  }
+  .search-box-wrap svg {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted-text);
+    pointer-events: none;
+  }
+  #searchInput {
+    width: 100%;
+    padding: 0.875rem 1.1rem 0.875rem 2.9rem;
+    font-size: 1rem;
+    border: 2px solid var(--card-border);
+    border-radius: 12px;
+    background: var(--card-bg);
+    color: var(--fg);
+    box-shadow: var(--shadow-md);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    font-family: inherit;
+  }
+  #searchInput:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(52,168,90,0.15), var(--shadow-md);
+  }
+  #searchInput::placeholder { color: var(--muted-text); }
+  .search-hint {
+    font-size: 0.8125rem;
+    color: var(--muted-text);
+    margin-bottom: 1.25rem;
+    text-align: center;
+  }
+  .results-wrap { width: 100%; max-width: 540px; }
+  .results-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--muted-text);
+    margin-bottom: 0.6rem;
+    padding: 0 0.25rem;
+  }
+  .patient-result {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 0.95rem 1.15rem;
+    margin-bottom: 0.5rem;
+    text-decoration: none;
+    color: var(--fg);
+    box-shadow: var(--shadow);
+    transition: border-color 0.15s, box-shadow 0.15s, transform 0.12s;
+  }
+  .patient-result:hover {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(52,168,90,0.1), var(--shadow);
+    transform: translateY(-1px);
+    text-decoration: none;
+    color: var(--fg);
+  }
+  .patient-avatar {
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #fff;
+    flex-shrink: 0;
+    letter-spacing: -0.02em;
+  }
+  .patient-info { flex: 1; min-width: 0; }
+  .patient-name {
+    font-weight: 600;
+    font-size: 0.9375rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .patient-meta { font-size: 0.8rem; color: var(--muted-text); margin-top: 0.1rem; }
+  .result-arrow { color: var(--muted-text); flex-shrink: 0; transition: transform 0.15s, color 0.15s; }
+  .patient-result:hover .result-arrow { transform: translateX(3px); color: var(--primary); }
+  .no-results {
+    text-align: center;
+    color: var(--muted-text);
+    font-size: 0.9375rem;
+    padding: 2rem 0 0.5rem;
+  }
+  .no-results strong { color: var(--fg); }
+  @media (max-width: 640px) {
+    .search-hero { padding: 3rem 1rem 2rem; }
+    .search-heading { font-size: 1.5rem; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="search-hero">
+  <div class="clinic-eyebrow">Green Valley Primary Care Clinic</div>
+  <h1 class="search-heading">Patient Search</h1>
+  <p class="search-sub">Enter a patient name to find their record</p>
+
+  <div class="search-box-wrap">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="search" id="searchInput" placeholder="Search by patient name..." autocomplete="off" autofocus />
+  </div>
+  <p class="search-hint" id="searchHint">Showing all {{ patients|length }} patients</p>
+
+  <div class="results-wrap">
+    <div class="results-label" id="resultsLabel">All Patients</div>
+    <div id="resultsList">
+      {% for p in patients %}
+      <a class="patient-result" href="/patient/{{ p.id }}" data-name="{{ p.name|lower }}">
+        <div class="patient-avatar">{{ p.name[0] }}{{ p.name.split()[1][0] }}</div>
+        <div class="patient-info">
+          <div class="patient-name">{{ p.name }}</div>
+          <div class="patient-meta">{{ p.gender }} &middot; Age {{ p.age }} &middot; DOB {{ p.dob }}</div>
+        </div>
+        <svg class="result-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
+      {% endfor %}
+    </div>
+    <div id="noResults" class="no-results" style="display:none">
+      No patients matching <strong id="searchTerm"></strong>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  var input    = document.getElementById('searchInput');
+  var list     = document.getElementById('resultsList');
+  var noRes    = document.getElementById('noResults');
+  var termEl   = document.getElementById('searchTerm');
+  var hintEl   = document.getElementById('searchHint');
+  var labelEl  = document.getElementById('resultsLabel');
+  var cards    = Array.from(list.querySelectorAll('.patient-result'));
+  var total    = {{ patients|length }};
+
+  input.addEventListener('input', function () {
+    var q = this.value.trim().toLowerCase();
+    var visible = 0;
+    cards.forEach(function (c) {
+      var match = !q || c.getAttribute('data-name').includes(q);
+      c.style.display = match ? '' : 'none';
+      if (match) visible++;
+    });
+    if (q && visible === 0) {
+      noRes.style.display = '';
+      termEl.textContent = '"' + this.value.trim() + '"';
+      labelEl.style.display = 'none';
+    } else {
+      noRes.style.display = 'none';
+      labelEl.style.display = '';
+      if (q) {
+        labelEl.textContent = visible + ' result' + (visible !== 1 ? 's' : '');
+        hintEl.textContent  = visible + ' patient' + (visible !== 1 ? 's' : '') + ' match your search';
+      } else {
+        labelEl.textContent = 'All Patients';
+        hintEl.textContent  = 'Showing all ' + total + ' patients';
+      }
+    }
+  });
+</script>
+{% endblock %}

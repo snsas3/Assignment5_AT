@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+{% block title %}{{ patient.name }} — Green Valley Primary Care Clinic{% endblock %}
+
+{% block nav_search %}
+<div class="navbar-search" id="navSearchWrap">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+  <input type="search" id="navSearchInput" placeholder="Search patients..." autocomplete="off" />
+</div>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .patient-page { padding: 1.75rem 1.25rem 3rem; max-width: 1200px; margin: 0 auto; }
+
+  /* Header */
+  .page-header { display: flex; align-items: center; gap: 0.85rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .back-btn {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    font-size: 0.8125rem; font-weight: 500; color: var(--muted-text);
+    padding: 0.35rem 0.75rem;
+    border: 1px solid var(--card-border); border-radius: 7px;
+    transition: all 0.15s; flex-shrink: 0; text-decoration: none;
+  }
+  .back-btn:hover { color: var(--fg); border-color: var(--muted-text); background: var(--muted-bg); text-decoration: none; }
+  .patient-hdr-name { font-size: 1.25rem; font-weight: 700; color: var(--fg); }
+  .patient-hdr-meta { font-size: 0.8125rem; color: var(--muted-text); margin-top: 0.1rem; }
+
+  /* Two-column layout */
+  .patient-layout {
+    display: grid;
+    grid-template-columns: 1fr 375px;
+    gap: 1.25rem;
+    align-items: start;
+  }
+  .left-col  { display: flex; flex-direction: column; gap: 1.25rem; }
+  .right-col { display: flex; flex-direction: column; gap: 1.25rem; }
+
+  /* Demographics */
+  .demo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem 1.5rem; }
+  .demo-label {
+    font-size: 0.68rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted-text); margin-bottom: 0.1rem;
+  }
+  .demo-value { font-size: 0.9rem; font-weight: 500; color: var(--fg); }
+
+  /* Vitals */
+  .vitals-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.65rem; }
+  .vital-box {
+    background: var(--bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 0.7rem 0.85rem;
+    text-align: center;
+  }
+  .vital-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted-text); margin-bottom: 0.25rem; }
+  .vital-value { font-size: 0.9375rem; font-weight: 700; color: var(--fg); }
+
+  /* Tag lists */
+  .tag-list { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+
+  /* Notes */
+  .note-item {
+    border-left: 3px solid var(--primary);
+    padding: 0.85rem 1rem;
+    background: var(--bg);
+    border-radius: 0 8px 8px 0;
+    margin-bottom: 0.75rem;
+  }
+  .note-item:last-child { margin-bottom: 0; }
+  .note-meta { font-size: 0.75rem; color: var(--muted-text); margin-bottom: 0.35rem; }
+  .note-meta strong { color: var(--fg); font-weight: 600; }
+  .note-content { font-size: 0.875rem; color: var(--fg); line-height: 1.6; }
+
+  /* Handoff */
+  .handoff-textarea {
+    width: 100%; min-height: 175px;
+    padding: 0.85rem 1rem;
+    font-size: 0.9rem;
+    resize: vertical;
+    border-radius: 8px;
+    border: 1px solid var(--input-border);
+    background: var(--input-bg);
+    color: var(--fg);
+    font-family: inherit;
+    line-height: 1.6;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    display: block;
+  }
+  .handoff-textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(52,168,90,0.15); }
+  .handoff-textarea::placeholder { color: var(--muted-text); }
+  .submit-row { display: flex; align-items: center; justify-content: space-between; margin-top: 0.75rem; gap: 0.75rem; flex-wrap: wrap; }
+  .submit-hint { font-size: 0.75rem; color: var(--muted-text); }
+
+  /* AI Summary placeholder */
+  .ai-empty {
+    min-height: 110px;
+    border: 2px dashed var(--card-border);
+    border-radius: 8px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 0.5rem; padding: 1.5rem; text-align: center;
+  }
+  .ai-empty p { font-size: 0.8125rem; color: var(--muted-text); max-width: 210px; line-height: 1.55; }
+  .ai-empty svg { color: var(--muted-text); opacity: 0.45; }
+
+  /* Nav search dropdown */
+  .nav-dropdown {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    background: var(--card-bg); border: 1px solid var(--card-border);
+    border-radius: 8px; box-shadow: var(--shadow-md);
+    z-index: 200; overflow: hidden; display: none;
+  }
+  .nav-dropdown.open { display: block; }
+  .nav-drop-item {
+    display: flex; align-items: center; gap: 0.7rem;
+    padding: 0.6rem 0.9rem;
+    text-decoration: none; color: var(--fg);
+    font-size: 0.875rem; transition: background 0.1s;
+  }
+  .nav-drop-item:hover { background: var(--muted-bg); text-decoration: none; }
+  .nav-drop-item strong { font-weight: 600; }
+  .nav-drop-item span   { font-size: 0.75rem; color: var(--muted-text); }
+
+  /* Sticky right panel on desktop */
+  @media (min-width: 1024px) { .right-col { position: sticky; top: 76px; } }
+
+  @media (max-width: 900px) {
+    .patient-layout { grid-template-columns: 1fr; }
+    .right-col { position: static; }
+    .vitals-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .patient-page { padding: 1.25rem 1rem 2.5rem; }
+    .demo-grid { grid-template-columns: 1fr; }
+    .vitals-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="patient-page">
+  <!-- Page header -->
+  <div class="page-header">
+    <a href="/" class="back-btn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Back
+    </a>
+    <div>
+      <div class="patient-hdr-name">{{ patient.name }}</div>
+      <div class="patient-hdr-meta">{{ patient.gender }} &middot; Age {{ patient.age }} &middot; DOB {{ patient.dob }}</div>
+    </div>
+  </div>
+
+  <div class="patient-layout">
+    <!-- ─── Left Column ─────────────────────────────────── -->
+    <div class="left-col">
+
+      <div class="card">
+        <div class="card-title">Demographics</div>
+        <div class="demo-grid">
+          <div><div class="demo-label">Date of Birth</div><div class="demo-value">{{ patient.dob }}</div></div>
+          <div><div class="demo-label">Gender</div><div class="demo-value">{{ patient.gender }}</div></div>
+          <div><div class="demo-label">Phone</div><div class="demo-value">{{ patient.phone }}</div></div>
+          <div><div class="demo-label">Address</div><div class="demo-value">{{ patient.address }}</div></div>
+          <div style="grid-column:1/-1"><div class="demo-label">Insurance</div><div class="demo-value">{{ patient.insurance }}</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Current Vitals</div>
+        <div class="vitals-grid">
+          <div class="vital-box"><div class="vital-label">Blood Pressure</div><div class="vital-value">{{ patient.vitals.bp }}</div></div>
+          <div class="vital-box"><div class="vital-label">Heart Rate</div><div class="vital-value">{{ patient.vitals.hr }}</div></div>
+          <div class="vital-box"><div class="vital-label">Temperature</div><div class="vital-value">{{ patient.vitals.temp }}</div></div>
+          <div class="vital-box"><div class="vital-label">Weight</div><div class="vital-value">{{ patient.vitals.weight }}</div></div>
+          <div class="vital-box"><div class="vital-label">Height</div><div class="vital-value">{{ patient.vitals.height }}</div></div>
+          <div class="vital-box"><div class="vital-label">O2 Saturation</div><div class="vital-value">{{ patient.vitals.o2_sat }}</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Active Conditions</div>
+        <div class="tag-list">
+          {% for c in patient.conditions %}
+          <span class="badge badge-condition">{{ c }}</span>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Current Medications</div>
+        <div style="display:flex;flex-direction:column;gap:0.5rem;">
+          {% for m in patient.medications %}
+          <div style="display:flex;align-items:baseline;gap:0.6rem;flex-wrap:wrap;">
+            <span class="badge badge-med">{{ m.name }}</span>
+            <span class="text-sm text-muted">{{ m.dose }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Past Clinical Notes</div>
+        {% for note in patient.notes %}
+        <div class="note-item">
+          <div class="note-meta"><strong>{{ note.provider }}</strong> &middot; {{ note.date }}</div>
+          <div class="note-content">{{ note.content }}</div>
+        </div>
+        {% endfor %}
+      </div>
+
+    </div><!-- /left-col -->
+
+    <!-- ─── Right Column ─────────────────────────────────── -->
+    <div class="right-col">
+
+      <div class="card">
+        <div class="card-title">Clinical Handoff Note</div>
+        <form method="POST" action="/submit-note">
+          <input type="hidden" name="patient_id" value="{{ patient.id }}" />
+          <textarea
+            class="handoff-textarea"
+            name="note_content"
+            placeholder="Enter clinical handoff note for {{ patient.name }}...&#10;&#10;Include current status, pending tasks, follow-up items, and any urgent concerns."
+          ></textarea>
+          <div class="submit-row">
+            <span class="submit-hint">Note will be submitted for review</span>
+            <button type="submit" class="btn btn-primary">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              Submit Note
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="card-title">AI Clinical Summary</div>
+        <div class="ai-empty">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+          <p>AI-generated summary will appear here once a handoff note is submitted and processed.</p>
+        </div>
+      </div>
+
+    </div><!-- /right-col -->
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  var ALL_PATIENTS = [
+    {% for p in patients %}
+    { id: "{{ p.id }}", name: "{{ p.name }}", age: {{ p.age }}, gender: "{{ p.gender }}" }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ];
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var navInput = document.getElementById('navSearchInput');
+    var wrap = document.getElementById('navSearchWrap');
+    if (!navInput || !wrap) return;
+
+    var dropdown = document.createElement('div');
+    dropdown.className = 'nav-dropdown';
+    wrap.appendChild(dropdown);
+
+    navInput.addEventListener('input', function () {
+      var q = this.value.trim().toLowerCase();
+      if (!q) { dropdown.classList.remove('open'); return; }
+      var matches = ALL_PATIENTS.filter(function (p) { return p.name.toLowerCase().includes(q); });
+      if (!matches.length) { dropdown.classList.remove('open'); return; }
+      dropdown.innerHTML = matches.map(function (p) {
+        return '<a class="nav-drop-item" href="/patient/' + p.id + '"><strong>' + p.name + '</strong><span>' + p.gender + ', ' + p.age + ' yrs</span></a>';
+      }).join('');
+      dropdown.classList.add('open');
+    });
+
+    navInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        var q = this.value.trim().toLowerCase();
+        var m = ALL_PATIENTS.find(function (p) { return p.name.toLowerCase().includes(q); });
+        if (m) window.location.href = '/patient/' + m.id;
+      }
+      if (e.key === 'Escape') { dropdown.classList.remove('open'); }
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!wrap.contains(e.target)) dropdown.classList.remove('open');
+    });
+  });
+</script>
+{% endblock %}

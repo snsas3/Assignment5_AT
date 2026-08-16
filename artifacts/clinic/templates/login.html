@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}Sign In — Green Valley Primary Care Clinic{% endblock %}
+{% block nav_search %}{% endblock %}
+
+{% block navbar %}
+<nav class="navbar">
+  <div class="navbar-inner">
+    <a href="/login" class="navbar-brand">
+      <span class="brand-dot"></span>
+      <span class="brand-name">Green Valley Primary Care</span>
+      <span class="brand-short" style="display:none">GV Clinic</span>
+    </a>
+    <div class="navbar-right">
+      <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark/light mode">
+        <span class="icon-dark">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </span>
+        <span class="icon-light">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        </span>
+        <span class="label-dark">Dark</span>
+        <span class="label-light">Light</span>
+      </button>
+    </div>
+  </div>
+</nav>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .login-page {
+    min-height: calc(100vh - 60px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem 1.25rem;
+  }
+  .login-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 2.25rem 2rem;
+    width: 100%;
+    max-width: 380px;
+    box-shadow: var(--shadow-md);
+  }
+  .login-logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+  }
+  .login-logo-dot {
+    width: 10px; height: 10px;
+    background: var(--primary);
+    border-radius: 50%;
+  }
+  .login-clinic {
+    font-size: 0.7rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--primary);
+  }
+  .login-title {
+    font-size: 1.375rem; font-weight: 700;
+    color: var(--fg); text-align: center;
+    margin-bottom: 0.3rem;
+  }
+  .login-sub {
+    font-size: 0.8125rem; color: var(--muted-text);
+    text-align: center; margin-bottom: 1.75rem;
+  }
+  .field-group { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 1rem; }
+  .field-label { font-size: 0.8125rem; font-weight: 600; color: var(--fg); }
+  .field-input {
+    width: 100%; padding: 0.6rem 0.85rem;
+    font-size: 0.9375rem; font-family: inherit;
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    background: var(--input-bg); color: var(--fg);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .field-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(52,168,90,0.15);
+  }
+  .field-input::placeholder { color: var(--muted-text); }
+  .login-error {
+    background: rgba(239,68,68,0.1);
+    border: 1px solid rgba(239,68,68,0.25);
+    color: var(--destructive);
+    border-radius: 8px;
+    padding: 0.6rem 0.85rem;
+    font-size: 0.8125rem;
+    margin-bottom: 1rem;
+  }
+  .login-submit {
+    width: 100%; padding: 0.65rem;
+    background: var(--primary); color: var(--btn-text);
+    border: none; border-radius: 8px;
+    font-size: 0.9375rem; font-weight: 600; font-family: inherit;
+    cursor: pointer; margin-top: 0.25rem;
+    transition: background 0.15s;
+  }
+  .login-submit:hover { background: var(--primary-dark); }
+  .login-demo {
+    margin-top: 1.5rem;
+    background: var(--bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 0.85rem 1rem;
+  }
+  .login-demo-title {
+    font-size: 0.7rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--muted-text); margin-bottom: 0.5rem;
+  }
+  .login-demo-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 0.8125rem; margin-bottom: 0.2rem;
+  }
+  .login-demo-row:last-child { margin-bottom: 0; }
+  .login-demo-user { font-weight: 600; color: var(--fg); }
+  .login-demo-pass { color: var(--muted-text); font-family: monospace; font-size: 0.8rem; }
+  @media (max-width: 480px) {
+    .login-card { padding: 1.75rem 1.25rem; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="login-page">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-dot"></div>
+      <span class="login-clinic">Green Valley Primary Care Clinic</span>
+    </div>
+    <h1 class="login-title">Sign In</h1>
+    <p class="login-sub">Clinician portal access only</p>
+
+    {% if error %}
+    <div class="login-error">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="/login">
+      <input type="hidden" name="next" value="{{ next_url }}" />
+      <div class="field-group">
+        <label class="field-label" for="username">Username</label>
+        <input class="field-input" type="text" id="username" name="username" placeholder="e.g. dr.patel" autocomplete="username" autofocus required />
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="password">Password</label>
+        <input class="field-input" type="password" id="password" name="password" placeholder="Password" autocomplete="current-password" required />
+      </div>
+      <button type="submit" class="login-submit">Sign In</button>
+    </form>
+
+    <div class="login-demo">
+      <div class="login-demo-title">Demo Application</div>
+      <p style="font-size:0.8125rem;color:var(--muted-text);line-height:1.5;margin:0">
+        This is a prototype for demonstration purposes only and is not intended for use with real patient data.
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}
