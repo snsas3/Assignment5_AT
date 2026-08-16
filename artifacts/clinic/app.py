@@ -21,18 +21,12 @@ app.config.update(
     SESSION_COOKIE_SECURE=os.environ.get("FLASK_ENV") == "production",
 )
 
-# ─── Credentials loaded from environment variables ─────────────────
-# Set CLINIC_CLINICIAN_PASS and CLINIC_ADMIN_PASS as Replit Secrets.
-# The app will refuse to serve login if either is missing.
-_clinician_pass = os.environ.get("CLINIC_CLINICIAN_PASS", "")
-_admin_pass      = os.environ.get("CLINIC_ADMIN_PASS", "")
-
-DEMO_USERS = {}
-if _clinician_pass:
-    DEMO_USERS["dr.patel"]  = _clinician_pass
-    DEMO_USERS["dr.okafor"] = _clinician_pass
-if _admin_pass:
-    DEMO_USERS["admin"] = _admin_pass
+# ─── Demo credentials (prototype only — no real patient data) ──────
+DEMO_USERS = {
+    "dr.patel":  "clinic2026",
+    "dr.okafor": "clinic2026",
+    "admin":     "admin2026",
+}
 
 ADMIN_USERS = {"admin"}
 
