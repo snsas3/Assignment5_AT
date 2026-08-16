@@ -14,7 +14,11 @@ app.secret_key = _secret_key
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
-    SESSION_COOKIE_SECURE=True,   # cookies only sent over HTTPS
+    # Only mark cookies Secure when the app is actually deployed over TLS.
+    # In the Replit dev proxy TLS is terminated upstream, so the internal
+    # Flask process sees plain HTTP — Secure=True would cause the browser
+    # to discard the session cookie on the first redirect.
+    SESSION_COOKIE_SECURE=os.environ.get("FLASK_ENV") == "production",
 )
 
 # ─── Credentials loaded from environment variables ─────────────────
@@ -240,11 +244,27 @@ def login():
     elif request.method == "POST":
         username = request.form.get("username", "").strip().lower()
         password = request.form.get("password", "")
+        print(f"[login] attempt: username={username!r} match={DEMO_USERS.get(username) == password}", flush=True)
         if DEMO_USERS.get(username) == password:
             session["username"] = username
             return redirect(next_url)
-        error = "Invalid username or password."
+        valid_users = ", ".join(sorted(DEMO_USERS.keys()))
+        error = f"Invalid username or password. Valid usernames: {valid_users}"
     return render_template("login.html", error=error, next_url=next_url)
+
+
+@app.route("/_auth_debug")
+def auth_debug():
+    """Development-only: shows whether credentials are loaded (never shows values)."""
+    return {
+        "secrets_loaded": {
+            "CLINIC_CLINICIAN_PASS": bool(_clinician_pass),
+            "CLINIC_ADMIN_PASS":     bool(_admin_pass),
+            "SESSION_SECRET":        bool(_secret_key),
+        },
+        "valid_usernames": sorted(DEMO_USERS.keys()),
+        "session_cookie_secure": app.config.get("SESSION_COOKIE_SECURE"),
+    }
 
 
 @app.route("/logout")
