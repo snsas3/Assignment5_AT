@@ -67,7 +67,7 @@
     <div class="stat-card">
       <div class="stat-label">Failed Generations</div>
       <div class="stat-value">{{ stats.total_failed_generations }}</div>
-      <div class="stat-desc">{{ "%.1f"|format(stats.total_failed_generations / stats.total_summaries_generated * 100) }}% failure rate</div>
+      <div class="stat-desc">{{ "%.1f"|format((stats.total_failed_generations / stats.total_summaries_generated * 100) if stats.total_summaries_generated else 0) }}% failure rate</div>
     </div>
   </div>
 
