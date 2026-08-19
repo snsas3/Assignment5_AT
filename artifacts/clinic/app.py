@@ -1,7 +1,10 @@
 import os
 import sys
+from datetime import datetime
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, session
+
+import db  # ── our database access layer (db.py) ──
 
 # ─── Require SESSION_SECRET at startup — no fallback ──────────────
 _secret_key = os.environ.get("SESSION_SECRET")
@@ -9,26 +12,26 @@ if not _secret_key:
     print("FATAL: SESSION_SECRET environment variable is not set.", file=sys.stderr)
     sys.exit(1)
 
+# ─── Gemini API Key ───────────────────────────────────────────────
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+
 app = Flask(__name__)
 app.secret_key = _secret_key
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
-    # Only mark cookies Secure when the app is actually deployed over TLS.
-    # In the Replit dev proxy TLS is terminated upstream, so the internal
-    # Flask process sees plain HTTP — Secure=True would cause the browser
-    # to discard the session cookie on the first redirect.
     SESSION_COOKIE_SECURE=os.environ.get("FLASK_ENV") == "production",
 )
 
 # ─── Demo credentials (prototype only — no real patient data) ──────
 DEMO_USERS = {
-    "dr.patel":  "clinic2026",
-    "dr.okafor": "clinic2026",
+    "dr.sharma": "clinic2026",
+    "dr.mehta":  "clinic2026",
     "admin":     "admin2026",
 }
-
 ADMIN_USERS = {"admin"}
+
+import requests  # for Gemini call
 
 
 def login_required(f):
@@ -50,180 +53,215 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
-PATIENTS = [
-    {
-        "id": "p001",
-        "name": "Margaret Chen",
-        "dob": "March 14, 1952",
-        "age": 73,
-        "gender": "Female",
-        "phone": "(555) 412-8834",
-        "address": "42 Maple Drive, Green Valley, CA 94501",
-        "insurance": "Blue Cross Premier — ID: BCX-447291",
-        "conditions": [
-            "Type 2 Diabetes",
-            "Hypertension",
-            "Hyperlipidemia",
-            "Osteoarthritis (bilateral knees)",
-        ],
-        "medications": [
-            {"name": "Metformin", "dose": "1000 mg twice daily"},
-            {"name": "Lisinopril", "dose": "10 mg once daily"},
-            {"name": "Atorvastatin", "dose": "40 mg at bedtime"},
-            {"name": "Acetaminophen", "dose": "500 mg as needed"},
-        ],
-        "vitals": {
-            "bp": "138/82 mmHg",
-            "hr": "74 bpm",
-            "temp": "98.4\u00b0F",
-            "weight": "168 lbs",
-            "height": "5'4\"",
-            "o2_sat": "97%",
-        },
-        "notes": [
-            {
-                "date": "July 28, 2026",
-                "provider": "Dr. Anika Patel",
-                "content": "Patient presents for 3-month diabetes follow-up. A1c improved from 7.8 to 7.2. Patient reports improved dietary compliance. Continue current metformin dose. Discussed knee pain management — referred to physical therapy.",
-            },
-            {
-                "date": "May 15, 2026",
-                "provider": "Dr. Anika Patel",
-                "content": "Hypertension management visit. BP slightly elevated today at 142/88. Patient admits inconsistent medication adherence. Reinforced importance of daily dosing. Added pill organizer as adherence aid. Return in 6 weeks for recheck.",
-            },
-            {
-                "date": "February 10, 2026",
-                "provider": "Dr. James Okafor",
-                "content": "Annual wellness visit. Routine labs ordered. Lipid panel shows LDL 112 mg/dL — increased atorvastatin from 20 mg to 40 mg. Flu and pneumonia vaccines administered. Mammogram referral placed.",
-            },
-        ],
-    },
-    {
-        "id": "p002",
-        "name": "Robert Nguyen",
-        "dob": "November 2, 1978",
-        "age": 47,
-        "gender": "Male",
-        "phone": "(555) 309-7761",
-        "address": "11 Birchwood Court, Green Valley, CA 94502",
-        "insurance": "Aetna Standard PPO — ID: AET-881034",
-        "conditions": [
-            "Asthma (moderate persistent)",
-            "Seasonal Allergic Rhinitis",
-            "Generalized Anxiety Disorder",
-        ],
-        "medications": [
-            {"name": "Fluticasone/Salmeterol (Advair)", "dose": "250/50 mcg inhaled twice daily"},
-            {"name": "Albuterol", "dose": "90 mcg inhaled as needed"},
-            {"name": "Cetirizine", "dose": "10 mg once daily"},
-            {"name": "Sertraline", "dose": "50 mg once daily"},
-        ],
-        "vitals": {
-            "bp": "122/78 mmHg",
-            "hr": "68 bpm",
-            "temp": "98.7\u00b0F",
-            "weight": "182 lbs",
-            "height": "5'10\"",
-            "o2_sat": "98%",
-        },
-        "notes": [
-            {
-                "date": "August 5, 2026",
-                "provider": "Dr. James Okafor",
-                "content": "Asthma follow-up. Patient reports 2 albuterol uses over the past month — well-controlled. Spirometry shows FEV1 at 82% predicted. No current exacerbations. Discussed peak flow monitoring at home. Continue current regimen.",
-            },
-            {
-                "date": "April 22, 2026",
-                "provider": "Dr. Anika Patel",
-                "content": "GAD follow-up. Patient rates anxiety 4/10, down from 6/10 last visit. Reports sertraline has been helpful. Continues weekly therapy with Dr. Kim. Sleep has improved. No side effects reported. Continue sertraline 50 mg.",
-            },
-            {
-                "date": "January 17, 2026",
-                "provider": "Dr. James Okafor",
-                "content": "Urgent visit for asthma flare following respiratory infection. Prescribed 5-day prednisone burst. Albuterol use increased to 3-4x/day. Instructed to return if not improving in 48 hours. Symptoms resolved by follow-up call.",
-            },
-        ],
-    },
-    {
-        "id": "p003",
-        "name": "Dorothy Williamson",
-        "dob": "July 19, 1965",
-        "age": 60,
-        "gender": "Female",
-        "phone": "(555) 827-5510",
-        "address": "88 Cedarwood Lane, Green Valley, CA 94503",
-        "insurance": "Medicare Advantage — Humana HMO — ID: HUM-2291847",
-        "conditions": [
-            "Hypothyroidism",
-            "Chronic Low Back Pain",
-            "Gastroesophageal Reflux Disease (GERD)",
-            "Insomnia",
-        ],
-        "medications": [
-            {"name": "Levothyroxine", "dose": "75 mcg once daily (morning, fasting)"},
-            {"name": "Omeprazole", "dose": "20 mg once daily before breakfast"},
-            {"name": "Cyclobenzaprine", "dose": "5 mg at bedtime as needed"},
-            {"name": "Melatonin", "dose": "3 mg at bedtime"},
-        ],
-        "vitals": {
-            "bp": "128/80 mmHg",
-            "hr": "64 bpm",
-            "temp": "97.8\u00b0F",
-            "weight": "154 lbs",
-            "height": "5'6\"",
-            "o2_sat": "99%",
-        },
-        "notes": [
-            {
-                "date": "July 10, 2026",
-                "provider": "Dr. Anika Patel",
-                "content": "Thyroid management visit. TSH 2.4 mIU/L — within normal range. Patient reports fatigue has improved since levothyroxine dose adjustment 3 months ago. GERD symptoms well-controlled on omeprazole. Back pain 3/10 today. Continue current plan.",
-            },
-            {
-                "date": "April 3, 2026",
-                "provider": "Dr. James Okafor",
-                "content": "Back pain evaluation. MRI lumbar spine reviewed — mild disc bulging at L4-L5, no cord compression. Initiated physical therapy referral. Prescribed cyclobenzaprine for acute spasm. Discussed core strengthening exercises. Avoid heavy lifting.",
-            },
-            {
-                "date": "February 28, 2026",
-                "provider": "Dr. Anika Patel",
-                "content": "Insomnia follow-up. Patient reports poor sleep quality — averaging 4-5 hours per night. Sleep hygiene counseling provided. Added melatonin 3 mg. Advised limiting screens before bed. TSH due for recheck — labs ordered. Will follow up with results.",
-            },
-        ],
-    },
-]
 
-PATIENTS_BY_ID = {p["id"]: p for p in PATIENTS}
+# ══════════════════════════════════════════════════════════════════
+#  SMART LOGIC LAYER  (unchanged from Stage 2 — rules, not AI)
+# ══════════════════════════════════════════════════════════════════
 
-ADMIN_STATS = {
-    "total_patients_viewed": 47,
-    "total_summaries_generated": 23,
-    "total_failed_generations": 2,
-    "activity_log": [
-        {"timestamp": "2026-08-16  14:32", "doctor": "Dr. Anika Patel", "patient": "Margaret Chen", "action": "Viewed Patient"},
-        {"timestamp": "2026-08-16  14:35", "doctor": "Dr. Anika Patel", "patient": "Margaret Chen", "action": "Generated Summary"},
-        {"timestamp": "2026-08-16  13:55", "doctor": "Dr. James Okafor", "patient": "Robert Nguyen", "action": "Viewed Patient"},
-        {"timestamp": "2026-08-16  13:58", "doctor": "Dr. James Okafor", "patient": "Robert Nguyen", "action": "Generated Summary"},
-        {"timestamp": "2026-08-16  11:10", "doctor": "Dr. Anika Patel", "patient": "Dorothy Williamson", "action": "Viewed Patient"},
-        {"timestamp": "2026-08-16  11:14", "doctor": "Dr. Anika Patel", "patient": "Dorothy Williamson", "action": "Summary Failed"},
-        {"timestamp": "2026-08-15  16:02", "doctor": "Dr. James Okafor", "patient": "Margaret Chen", "action": "Generated Summary"},
-        {"timestamp": "2026-08-15  15:30", "doctor": "Dr. James Okafor", "patient": "Dorothy Williamson", "action": "Viewed Patient"},
-        {"timestamp": "2026-08-15  09:45", "doctor": "Dr. Anika Patel", "patient": "Robert Nguyen", "action": "Viewed Patient"},
-        {"timestamp": "2026-08-14  14:20", "doctor": "Dr. James Okafor", "patient": "Robert Nguyen", "action": "Generated Summary"},
+RISK_KEYWORDS = {
+    "critical": [
+        "chest pain", "cardiac arrest", "stroke", "seizure", "unconscious",
+        "unresponsive", "severe bleeding", "anaphylaxis", "respiratory failure",
+        "cardiac", "code blue", "intubation", "crash", "sepsis",
     ],
-    "daily_summaries": [
-        {"date": "Aug 11", "count": 2},
-        {"date": "Aug 12", "count": 4},
-        {"date": "Aug 13", "count": 3},
-        {"date": "Aug 14", "count": 5},
-        {"date": "Aug 15", "count": 4},
-        {"date": "Aug 16", "count": 5},
+    "high": [
+        "shortness of breath", "high fever", "bleeding", "fall", "fracture",
+        "infection", "elevated bp", "hypertensive", "hyperglycemia",
+        "hypoglycemia", "non-compliant", "non-adherent", "medication adherence",
+        "inconsistent medication", "chest tightness", "dizziness", "fainting",
+        "asthma flare", "exacerbation", "prednisone", "urgent", "missed doses",
+    ],
+    "medium": [
+        "pain", "elevated", "increased", "worsening", "fatigue",
+        "poor sleep", "insomnia", "anxiety", "nausea", "swelling",
+        "referral", "follow-up", "recheck", "monitor", "labs ordered",
+        "breathlessness", "migraine",
     ],
 }
 
 
-def _safe_next(url: str) -> str:
-    """Return url only if it's a same-origin relative path; otherwise fall back to '/'."""
+def detect_risk_keywords(text):
+    text_lower = text.lower()
+    found = {"critical": [], "high": [], "medium": []}
+    for level, keywords in RISK_KEYWORDS.items():
+        for kw in keywords:
+            if kw in text_lower and kw not in found[level]:
+                found[level].append(kw)
+    return found
+
+
+def assign_priority(risk_keywords, patient):
+    conditions = patient.get("conditions", []) or []
+    age = patient.get("age", 0) or 0
+
+    if risk_keywords["critical"]:
+        return {"level": "CRITICAL", "color": "#dc2626",
+                "reason": "Critical risk keywords detected: " + ", ".join(risk_keywords["critical"])}
+    if risk_keywords["high"]:
+        if len(conditions) >= 3:
+            return {"level": "HIGH", "color": "#ea580c",
+                    "reason": "High-risk keywords with multiple comorbidities: " + ", ".join(risk_keywords["high"])}
+        return {"level": "HIGH", "color": "#ea580c",
+                "reason": "High-risk keywords detected: " + ", ".join(risk_keywords["high"])}
+    if risk_keywords["medium"]:
+        if age >= 65:
+            return {"level": "MEDIUM-HIGH", "color": "#d97706",
+                    "reason": f"Medium-risk keywords in elderly patient (age {age}): " + ", ".join(risk_keywords["medium"])}
+        return {"level": "MEDIUM", "color": "#ca8a04",
+                "reason": "Medium-risk keywords detected: " + ", ".join(risk_keywords["medium"])}
+    return {"level": "LOW", "color": "#16a34a",
+            "reason": "No significant risk keywords detected. Routine follow-up."}
+
+
+def suggest_actions(risk_keywords, priority, patient):
+    actions = []
+    conditions_lower = [c.lower() for c in (patient.get("conditions", []) or [])]
+    age = patient.get("age", 0) or 0
+
+    if priority["level"] == "CRITICAL":
+        actions += ["Immediate physician review required",
+                    "Prepare for potential emergency intervention",
+                    "Verify all current medications and allergies"]
+    elif priority["level"] == "HIGH":
+        actions.append("Schedule priority follow-up within 48 hours")
+        if any(kw in ["non-compliant", "non-adherent", "inconsistent medication",
+                      "medication adherence", "missed doses"] for kw in risk_keywords["high"]):
+            actions.append("Medication adherence counseling recommended")
+        if any(kw in ["asthma flare", "exacerbation", "shortness of breath"]
+               for kw in risk_keywords["high"]):
+            actions.append("Monitor respiratory status closely")
+        actions.append("Review and reconcile current medications")
+    elif priority["level"] in ["MEDIUM", "MEDIUM-HIGH"]:
+        actions.append("Schedule follow-up within 1-2 weeks")
+        if any(kw in ["labs ordered", "recheck"] for kw in risk_keywords["medium"]):
+            actions.append("Ensure pending lab results are reviewed")
+        if "referral" in risk_keywords["medium"]:
+            actions.append("Confirm referral has been placed and received")
+    else:
+        actions += ["Continue current care plan",
+                    "Schedule routine follow-up per care guidelines"]
+
+    if age >= 65:
+        actions.append("Review fall risk assessment")
+    if any("diabetes" in c for c in conditions_lower):
+        actions.append("Check HbA1c if not done in last 3 months")
+    if any("hypertension" in c for c in conditions_lower):
+        actions.append("Verify BP log is up to date")
+    if any("anemia" in c for c in conditions_lower):
+        actions.append("Recheck hemoglobin and iron studies as scheduled")
+
+    # De-dupe while preserving order, cap at 6
+    seen, out = set(), []
+    for a in actions:
+        if a not in seen:
+            seen.add(a); out.append(a)
+    return out[:6]
+
+
+# ─── Gemini AI Summary ─────────────────────────────────────────────
+def generate_ai_summary(patient, handoff_note):
+    if not GEMINI_API_KEY:
+        return None, "Gemini API key not configured"
+
+    conditions_str = ", ".join(patient.get("conditions", []) or [])
+    meds = patient.get("medications", []) or []
+    medications_str = "; ".join([f"{m.get('name','')} {m.get('dose','')}" for m in meds])
+
+    # Flatten grouped vitals into a readable string (latest of each type)
+    vitals_grouped = patient.get("vitals_grouped", {}) or {}
+    vital_bits = []
+    for vtype, readings in vitals_grouped.items():
+        if readings:
+            latest = readings[0]
+            vital_bits.append(f"{vtype}: {latest['reading']} {latest.get('unit','')}".strip())
+    vitals_str = ", ".join(vital_bits) if vital_bits else "No recent vitals on file"
+
+    past_notes_str = ""
+    for note in (patient.get("notes", []) or [])[:3]:
+        past_notes_str += f"\n- {note.get('note_date','')} ({note.get('provider','')}): {note.get('content','')}"
+
+    prompt = f"""You are a clinical documentation assistant. Generate a structured, NON-DIAGNOSTIC clinical summary for a patient handoff. This summary will be read by the incoming clinician taking over this patient's care.
+
+PATIENT INFORMATION:
+- Name: {patient.get('name','')}
+- Age: {patient.get('age','')}, Gender: {patient.get('gender','')}
+- Active Conditions: {conditions_str}
+- Current Medications: {medications_str}
+- Recent Vitals: {vitals_str}
+
+PAST CLINICAL NOTES:{past_notes_str}
+
+CURRENT HANDOFF NOTE FROM OUTGOING CLINICIAN:
+{handoff_note}
+
+Generate the summary in exactly these 5 sections. Be concise and clinical. Do NOT make diagnoses or treatment decisions. Use plain text only, no markdown formatting:
+
+1. PATIENT IDENTIFICATION: Brief one-line patient identifier with key demographics.
+2. MEDICAL HISTORY & STATUS: Active conditions, current status, recent trends (improving/stable/worsening).
+3. CURRENT ASSESSMENT: Key findings from the handoff note and recent vitals. Flag anything needing attention.
+4. CLINICAL DETAILS: Current medications, recent changes, pending labs or referrals.
+5. PLAN OF CARE: Immediate next steps, pending actions, follow-up timeline, instructions for the incoming clinician.
+
+Keep each section to 2-3 sentences maximum. Be factual and specific."""
+
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.3, "maxOutputTokens": 800},
+        }
+        response = requests.post(url, json=payload, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        text = data["candidates"][0]["content"]["parts"][0]["text"]
+        return text, None
+    except requests.exceptions.Timeout:
+        return None, "AI service timed out. Please try again."
+    except requests.exceptions.RequestException as e:
+        return None, f"AI service error: {str(e)}"
+    except (KeyError, IndexError) as e:
+        return None, f"Unexpected AI response format: {str(e)}"
+
+
+def parse_summary_sections(raw_summary):
+    sections = {
+        "patient_identification": "", "medical_history": "",
+        "current_assessment": "", "clinical_details": "", "plan_of_care": "",
+    }
+    section_markers = [
+        ("1. PATIENT IDENTIFICATION", "patient_identification"),
+        ("2. MEDICAL HISTORY & STATUS", "medical_history"),
+        ("3. CURRENT ASSESSMENT", "current_assessment"),
+        ("4. CLINICAL DETAILS", "clinical_details"),
+        ("5. PLAN OF CARE", "plan_of_care"),
+    ]
+    current_key = None
+    for line in raw_summary.split("\n"):
+        s = line.strip()
+        if not s:
+            continue
+        matched = False
+        for marker, key in section_markers:
+            label = marker.split(". ", 1)[1].lower()
+            if marker.lower() in s.lower() or s.lower().startswith(label):
+                current_key = key
+                parts = s.split(":", 1)
+                if len(parts) > 1 and parts[1].strip():
+                    sections[current_key] = parts[1].strip()
+                matched = True
+                break
+        if not matched and current_key:
+            sections[current_key] = (sections[current_key] + " " + s).strip()
+    if not any(sections.values()):
+        sections["patient_identification"] = raw_summary
+    return sections
+
+
+# ══════════════════════════════════════════════════════════════════
+#  ROUTES
+# ══════════════════════════════════════════════════════════════════
+
+def _safe_next(url):
     if url and url.startswith("/") and not url.startswith("//"):
         return url
     return "/"
@@ -234,31 +272,16 @@ def login():
     error = None
     next_url = _safe_next(request.args.get("next", "") or request.form.get("next", ""))
     if not DEMO_USERS:
-        error = "Server is not configured with login credentials. Set CLINIC_CLINICIAN_PASS and CLINIC_ADMIN_PASS."
+        error = "Server is not configured with login credentials."
     elif request.method == "POST":
         username = request.form.get("username", "").strip().lower()
         password = request.form.get("password", "")
-        print(f"[login] attempt: username={username!r} match={DEMO_USERS.get(username) == password}", flush=True)
         if DEMO_USERS.get(username) == password:
             session["username"] = username
             return redirect(next_url)
         valid_users = ", ".join(sorted(DEMO_USERS.keys()))
         error = f"Invalid username or password. Valid usernames: {valid_users}"
     return render_template("login.html", error=error, next_url=next_url)
-
-
-@app.route("/_auth_debug")
-def auth_debug():
-    """Development-only: shows whether credentials are loaded (never shows values)."""
-    return {
-        "secrets_loaded": {
-            "CLINIC_CLINICIAN_PASS": bool(_clinician_pass),
-            "CLINIC_ADMIN_PASS":     bool(_admin_pass),
-            "SESSION_SECRET":        bool(_secret_key),
-        },
-        "valid_usernames": sorted(DEMO_USERS.keys()),
-        "session_cookie_secure": app.config.get("SESSION_COOKIE_SECURE"),
-    }
 
 
 @app.route("/logout")
@@ -270,35 +293,78 @@ def logout():
 @app.route("/")
 @login_required
 def index():
-    return render_template("search.html", patients=PATIENTS, username=session.get("username"))
-
-
-@app.route("/search")
-@login_required
-def search():
-    return redirect(url_for("index"))
+    patients = db.get_all_patients()
+    return render_template("search.html", patients=patients, username=session.get("username"))
 
 
 @app.route("/patient/<patient_id>")
 @login_required
 def patient_detail(patient_id):
-    patient = PATIENTS_BY_ID.get(patient_id)
+    patient = db.get_patient_full(patient_id)
     if not patient:
         return redirect(url_for("index"))
-    return render_template("patient.html", patient=patient, patients=PATIENTS, username=session.get("username"))
+    patients = db.get_all_patients()  # for the nav search dropdown
+    return render_template("patient.html", patient=patient, patients=patients,
+                           username=session.get("username"))
 
 
 @app.route("/admin")
 @admin_required
 def admin():
-    return render_template("admin.html", stats=ADMIN_STATS, username=session.get("username"))
+    stats = db.get_admin_stats()
+    return render_template("admin.html", stats=stats, username=session.get("username"))
 
 
 @app.route("/submit-note", methods=["POST"])
 @login_required
 def submit_note():
     patient_id = request.form.get("patient_id", "")
-    return redirect(url_for("patient_detail", patient_id=patient_id))
+    note_content = request.form.get("note_content", "").strip()
+    patient = db.get_patient_full(patient_id)
+
+    if not patient or not note_content:
+        return redirect(url_for("patient_detail", patient_id=patient_id))
+
+    # ─── Combine text for risk analysis (new note + past notes) ──
+    all_notes_text = note_content
+    for note in (patient.get("notes", []) or []):
+        all_notes_text += " " + note.get("content", "")
+
+    # ─── Smart Logic Layer ───────────────────────────────────────
+    risk_keywords = detect_risk_keywords(all_notes_text)
+    priority = assign_priority(risk_keywords, patient)
+    actions = suggest_actions(risk_keywords, priority, patient)
+
+    # ─── AI Summary ──────────────────────────────────────────────
+    ai_summary_raw, ai_error = generate_ai_summary(patient, note_content)
+    summary_sections = parse_summary_sections(ai_summary_raw) if ai_summary_raw else None
+
+    # ─── Persist to database ─────────────────────────────────────
+    db.save_handoff_note(
+        patient_id=patient_id,
+        note_content=note_content,
+        ai_summary=ai_summary_raw,        # None if AI failed → counts as failure in stats
+        priority_level=priority["level"],
+        risk_keywords=risk_keywords,
+        doctor_username=session.get("username", "unknown"),
+    )
+
+    summary_result = {
+        "generated": ai_summary_raw is not None,
+        "error": ai_error,
+        "sections": summary_sections,
+        "raw": ai_summary_raw,
+        "risk_keywords": risk_keywords,
+        "priority": priority,
+        "actions": actions,
+        "handoff_note": note_content,
+        "generated_at": datetime.now().strftime("%B %d, %Y at %I:%M %p"),
+        "generated_by": session.get("username", "unknown"),
+    }
+
+    patients = db.get_all_patients()
+    return render_template("patient.html", patient=patient, patients=patients,
+                           username=session.get("username"), summary=summary_result)
 
 
 if __name__ == "__main__":

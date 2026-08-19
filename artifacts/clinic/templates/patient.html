@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ patient.name }} — Green Valley Primary Care Clinic{% endblock %}
+{% block title %}{{ patient.name }} — Meridian Family Health{% endblock %}
 
 {% block nav_search %}
 <div class="navbar-search" id="navSearchWrap">
@@ -11,137 +11,109 @@
 {% block extra_head %}
 <style>
   .patient-page { padding: 1.75rem 1.25rem 3rem; max-width: 1200px; margin: 0 auto; }
-
-  /* Header */
   .page-header { display: flex; align-items: center; gap: 0.85rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
   .back-btn {
     display: inline-flex; align-items: center; gap: 0.3rem;
     font-size: 0.8125rem; font-weight: 500; color: var(--muted-text);
-    padding: 0.35rem 0.75rem;
-    border: 1px solid var(--card-border); border-radius: 7px;
-    transition: all 0.15s; flex-shrink: 0; text-decoration: none;
+    padding: 0.35rem 0.75rem; border: 1px solid var(--card-border);
+    border-radius: 7px; transition: all 0.15s; flex-shrink: 0; text-decoration: none;
   }
   .back-btn:hover { color: var(--fg); border-color: var(--muted-text); background: var(--muted-bg); text-decoration: none; }
   .patient-hdr-name { font-size: 1.25rem; font-weight: 700; color: var(--fg); }
   .patient-hdr-meta { font-size: 0.8125rem; color: var(--muted-text); margin-top: 0.1rem; }
 
-  /* Two-column layout */
-  .patient-layout {
-    display: grid;
-    grid-template-columns: 1fr 375px;
-    gap: 1.25rem;
-    align-items: start;
-  }
+  .patient-layout { display: grid; grid-template-columns: 1fr 375px; gap: 1.25rem; align-items: start; }
   .left-col  { display: flex; flex-direction: column; gap: 1.25rem; }
   .right-col { display: flex; flex-direction: column; gap: 1.25rem; }
 
-  /* Demographics */
   .demo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem 1.5rem; }
-  .demo-label {
-    font-size: 0.68rem; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.06em;
-    color: var(--muted-text); margin-bottom: 0.1rem;
-  }
+  .demo-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted-text); margin-bottom: 0.1rem; }
   .demo-value { font-size: 0.9rem; font-weight: 500; color: var(--fg); }
 
-  /* Vitals */
-  .vitals-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.65rem; }
-  .vital-box {
-    background: var(--bg);
-    border: 1px solid var(--card-border);
-    border-radius: 8px;
-    padding: 0.7rem 0.85rem;
-    text-align: center;
+  /* Vitals with history */
+  .vital-group { margin-bottom: 0.9rem; }
+  .vital-group:last-child { margin-bottom: 0; }
+  .vital-group-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 0.35rem;
   }
-  .vital-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted-text); margin-bottom: 0.25rem; }
-  .vital-value { font-size: 0.9375rem; font-weight: 700; color: var(--fg); }
+  .vital-type-name { font-size: 0.8rem; font-weight: 700; color: var(--fg); }
+  .vital-latest { font-size: 0.95rem; font-weight: 700; color: var(--primary); }
+  .vital-history { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  .vital-chip {
+    font-size: 0.72rem; color: var(--muted-text);
+    background: var(--bg); border: 1px solid var(--card-border);
+    border-radius: 6px; padding: 0.15rem 0.5rem;
+  }
+  .vital-chip.newest { border-color: var(--primary); color: var(--fg); font-weight: 600; }
 
-  /* Tag lists */
   .tag-list { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 
-  /* Notes */
-  .note-item {
-    border-left: 3px solid var(--primary);
-    padding: 0.85rem 1rem;
-    background: var(--bg);
-    border-radius: 0 8px 8px 0;
-    margin-bottom: 0.75rem;
-  }
+  .note-item { border-left: 3px solid var(--primary); padding: 0.85rem 1rem; background: var(--bg); border-radius: 0 8px 8px 0; margin-bottom: 0.75rem; }
   .note-item:last-child { margin-bottom: 0; }
   .note-meta { font-size: 0.75rem; color: var(--muted-text); margin-bottom: 0.35rem; }
   .note-meta strong { color: var(--fg); font-weight: 600; }
   .note-content { font-size: 0.875rem; color: var(--fg); line-height: 1.6; }
 
-  /* Handoff */
   .handoff-textarea {
-    width: 100%; min-height: 175px;
-    padding: 0.85rem 1rem;
-    font-size: 0.9rem;
-    resize: vertical;
-    border-radius: 8px;
-    border: 1px solid var(--input-border);
-    background: var(--input-bg);
-    color: var(--fg);
-    font-family: inherit;
-    line-height: 1.6;
-    outline: none;
-    transition: border-color 0.15s, box-shadow 0.15s;
-    display: block;
+    width: 100%; min-height: 175px; padding: 0.85rem 1rem; font-size: 0.9rem;
+    resize: vertical; border-radius: 8px; border: 1px solid var(--input-border);
+    background: var(--input-bg); color: var(--fg); font-family: inherit;
+    line-height: 1.6; outline: none; transition: border-color 0.15s, box-shadow 0.15s; display: block;
   }
   .handoff-textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(52,168,90,0.15); }
   .handoff-textarea::placeholder { color: var(--muted-text); }
   .submit-row { display: flex; align-items: center; justify-content: space-between; margin-top: 0.75rem; gap: 0.75rem; flex-wrap: wrap; }
   .submit-hint { font-size: 0.75rem; color: var(--muted-text); }
 
-  /* AI Summary placeholder */
-  .ai-empty {
-    min-height: 110px;
-    border: 2px dashed var(--card-border);
-    border-radius: 8px;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    gap: 0.5rem; padding: 1.5rem; text-align: center;
-  }
+  .ai-empty { min-height: 110px; border: 2px dashed var(--card-border); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; padding: 1.5rem; text-align: center; }
   .ai-empty p { font-size: 0.8125rem; color: var(--muted-text); max-width: 210px; line-height: 1.55; }
   .ai-empty svg { color: var(--muted-text); opacity: 0.45; }
 
-  /* Nav search dropdown */
-  .nav-dropdown {
-    position: absolute; top: calc(100% + 4px); left: 0; right: 0;
-    background: var(--card-bg); border: 1px solid var(--card-border);
-    border-radius: 8px; box-shadow: var(--shadow-md);
-    z-index: 200; overflow: hidden; display: none;
-  }
+  .summary-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+  .priority-badge { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; color: #ffffff; }
+  .summary-meta { font-size: 0.7rem; color: var(--muted-text); }
+  .summary-section { margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--card-border); }
+  .summary-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .summary-section-title { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--primary); margin-bottom: 0.4rem; }
+  .summary-section-content { font-size: 0.85rem; line-height: 1.65; color: var(--fg); }
+
+  .risk-section { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--card-border); }
+  .risk-title { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted-text); margin-bottom: 0.5rem; }
+  .risk-tags { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.5rem; }
+  .risk-tag { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 12px; font-size: 0.7rem; font-weight: 500; }
+  .risk-tag-critical { background: rgba(220,38,38,0.12); color: #dc2626; }
+  .risk-tag-high { background: rgba(234,88,12,0.12); color: #ea580c; }
+  .risk-tag-medium { background: rgba(202,138,4,0.12); color: #ca8a04; }
+
+  .actions-list { list-style: none; padding: 0; margin: 0; }
+  .actions-list li { font-size: 0.82rem; color: var(--fg); padding: 0.4rem 0; padding-left: 1.2rem; position: relative; line-height: 1.5; }
+  .actions-list li::before { content: "→"; position: absolute; left: 0; color: var(--primary); font-weight: 600; }
+
+  .ai-error { padding: 1rem; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); border-radius: 8px; color: var(--destructive); font-size: 0.85rem; line-height: 1.5; }
+
+  .handoff-echo { background: var(--bg); border-left: 3px solid var(--secondary); border-radius: 0 8px 8px 0; padding: 0.75rem 1rem; margin-bottom: 1rem; }
+  .handoff-echo-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--secondary); margin-bottom: 0.3rem; }
+  .handoff-echo-text { font-size: 0.85rem; color: var(--fg); line-height: 1.6; font-style: italic; }
+
+  .doctor-line { font-size: 0.8rem; color: var(--muted-text); margin-top: 0.25rem; }
+  .doctor-line strong { color: var(--fg); font-weight: 600; }
+
+  .nav-dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; box-shadow: var(--shadow-md); z-index: 200; overflow: hidden; display: none; }
   .nav-dropdown.open { display: block; }
-  .nav-drop-item {
-    display: flex; align-items: center; gap: 0.7rem;
-    padding: 0.6rem 0.9rem;
-    text-decoration: none; color: var(--fg);
-    font-size: 0.875rem; transition: background 0.1s;
-  }
+  .nav-drop-item { display: flex; align-items: center; gap: 0.7rem; padding: 0.6rem 0.9rem; text-decoration: none; color: var(--fg); font-size: 0.875rem; transition: background 0.1s; }
   .nav-drop-item:hover { background: var(--muted-bg); text-decoration: none; }
   .nav-drop-item strong { font-weight: 600; }
-  .nav-drop-item span   { font-size: 0.75rem; color: var(--muted-text); }
+  .nav-drop-item span { font-size: 0.75rem; color: var(--muted-text); }
 
-  /* Sticky right panel on desktop */
   @media (min-width: 1024px) { .right-col { position: sticky; top: 76px; } }
-
-  @media (max-width: 900px) {
-    .patient-layout { grid-template-columns: 1fr; }
-    .right-col { position: static; }
-    .vitals-grid { grid-template-columns: repeat(2, 1fr); }
-  }
-  @media (max-width: 640px) {
-    .patient-page { padding: 1.25rem 1rem 2.5rem; }
-    .demo-grid { grid-template-columns: 1fr; }
-    .vitals-grid { grid-template-columns: repeat(2, 1fr); }
-  }
+  @media (max-width: 900px) { .patient-layout { grid-template-columns: 1fr; } .right-col { position: static; } }
+  @media (max-width: 640px) { .patient-page { padding: 1.25rem 1rem 2.5rem; } .demo-grid { grid-template-columns: 1fr; } }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="patient-page">
-  <!-- Page header -->
   <div class="page-header">
     <a href="/" class="back-btn">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
@@ -154,7 +126,7 @@
   </div>
 
   <div class="patient-layout">
-    <!-- ─── Left Column ─────────────────────────────────── -->
+    <!-- Left Column -->
     <div class="left-col">
 
       <div class="card">
@@ -164,20 +136,37 @@
           <div><div class="demo-label">Gender</div><div class="demo-value">{{ patient.gender }}</div></div>
           <div><div class="demo-label">Phone</div><div class="demo-value">{{ patient.phone }}</div></div>
           <div><div class="demo-label">Address</div><div class="demo-value">{{ patient.address }}</div></div>
-          <div style="grid-column:1/-1"><div class="demo-label">Insurance</div><div class="demo-value">{{ patient.insurance }}</div></div>
+          <div><div class="demo-label">Insurance</div><div class="demo-value">{{ patient.insurance }}</div></div>
+          {% if patient.doctor %}
+          <div><div class="demo-label">Assigned Doctor</div><div class="demo-value">{{ patient.doctor.name }}</div></div>
+          {% endif %}
         </div>
+        {% if patient.doctor %}
+        <div class="doctor-line"><strong>{{ patient.doctor.name }}</strong> &middot; {{ patient.doctor.specialty }}</div>
+        {% endif %}
       </div>
 
       <div class="card">
-        <div class="card-title">Current Vitals</div>
-        <div class="vitals-grid">
-          <div class="vital-box"><div class="vital-label">Blood Pressure</div><div class="vital-value">{{ patient.vitals.bp }}</div></div>
-          <div class="vital-box"><div class="vital-label">Heart Rate</div><div class="vital-value">{{ patient.vitals.hr }}</div></div>
-          <div class="vital-box"><div class="vital-label">Temperature</div><div class="vital-value">{{ patient.vitals.temp }}</div></div>
-          <div class="vital-box"><div class="vital-label">Weight</div><div class="vital-value">{{ patient.vitals.weight }}</div></div>
-          <div class="vital-box"><div class="vital-label">Height</div><div class="vital-value">{{ patient.vitals.height }}</div></div>
-          <div class="vital-box"><div class="vital-label">O2 Saturation</div><div class="vital-value">{{ patient.vitals.o2_sat }}</div></div>
-        </div>
+        <div class="card-title">Recent Vitals <span class="text-sm text-muted">(last 3 readings)</span></div>
+        {% if patient.vitals_grouped %}
+          {% for vtype, readings in patient.vitals_grouped.items() %}
+          <div class="vital-group">
+            <div class="vital-group-head">
+              <span class="vital-type-name">{{ vtype }}</span>
+              {% if readings %}
+              <span class="vital-latest">{{ readings[0].reading }} {{ readings[0].unit }}</span>
+              {% endif %}
+            </div>
+            <div class="vital-history">
+              {% for r in readings %}
+              <span class="vital-chip {% if loop.first %}newest{% endif %}">{{ r.reading }} {{ r.unit }} &middot; {{ r.recorded_at }}</span>
+              {% endfor %}
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <p class="text-sm text-muted">No vitals on file.</p>
+        {% endif %}
       </div>
 
       <div class="card">
@@ -185,6 +174,8 @@
         <div class="tag-list">
           {% for c in patient.conditions %}
           <span class="badge badge-condition">{{ c }}</span>
+          {% else %}
+          <span class="text-sm text-muted">No active conditions recorded.</span>
           {% endfor %}
         </div>
       </div>
@@ -197,6 +188,8 @@
             <span class="badge badge-med">{{ m.name }}</span>
             <span class="text-sm text-muted">{{ m.dose }}</span>
           </div>
+          {% else %}
+          <span class="text-sm text-muted">No current medications recorded.</span>
           {% endfor %}
         </div>
       </div>
@@ -205,28 +198,28 @@
         <div class="card-title">Past Clinical Notes</div>
         {% for note in patient.notes %}
         <div class="note-item">
-          <div class="note-meta"><strong>{{ note.provider }}</strong> &middot; {{ note.date }}</div>
+          <div class="note-meta"><strong>{{ note.provider }}</strong> &middot; {{ note.note_date }}</div>
           <div class="note-content">{{ note.content }}</div>
         </div>
+        {% else %}
+        <p class="text-sm text-muted">No past clinical notes on file.</p>
         {% endfor %}
       </div>
 
-    </div><!-- /left-col -->
+    </div>
 
-    <!-- ─── Right Column ─────────────────────────────────── -->
+    <!-- Right Column -->
     <div class="right-col">
 
       <div class="card">
         <div class="card-title">Clinical Handoff Note</div>
         <form method="POST" action="/submit-note">
           <input type="hidden" name="patient_id" value="{{ patient.id }}" />
-          <textarea
-            class="handoff-textarea"
-            name="note_content"
+          <textarea class="handoff-textarea" name="note_content"
             placeholder="Enter clinical handoff note for {{ patient.name }}...&#10;&#10;Include current status, pending tasks, follow-up items, and any urgent concerns."
-          ></textarea>
+          >{% if summary and summary.handoff_note %}{{ summary.handoff_note }}{% endif %}</textarea>
           <div class="submit-row">
-            <span class="submit-hint">Note will be submitted for review</span>
+            <span class="submit-hint">Note will be saved and summarized</span>
             <button type="submit" class="btn btn-primary">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
               Submit Note
@@ -237,13 +230,76 @@
 
       <div class="card">
         <div class="card-title">AI Clinical Summary</div>
-        <div class="ai-empty">
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
-          <p>AI-generated summary will appear here once a handoff note is submitted and processed.</p>
-        </div>
+
+        {% if summary and summary.generated %}
+          <div class="summary-header">
+            <span class="priority-badge" style="background:{{ summary.priority.color }}">{{ summary.priority.level }} PRIORITY</span>
+            <span class="summary-meta">Generated {{ summary.generated_at }} by {{ summary.generated_by }}</span>
+          </div>
+
+          <div class="handoff-echo">
+            <div class="handoff-echo-label">Outgoing Clinician's Note</div>
+            <div class="handoff-echo-text">{{ summary.handoff_note }}</div>
+          </div>
+
+          {% if summary.sections %}
+            {% if summary.sections.patient_identification %}
+            <div class="summary-section"><div class="summary-section-title">Patient Identification</div><div class="summary-section-content">{{ summary.sections.patient_identification }}</div></div>
+            {% endif %}
+            {% if summary.sections.medical_history %}
+            <div class="summary-section"><div class="summary-section-title">Medical History & Status</div><div class="summary-section-content">{{ summary.sections.medical_history }}</div></div>
+            {% endif %}
+            {% if summary.sections.current_assessment %}
+            <div class="summary-section"><div class="summary-section-title">Current Assessment</div><div class="summary-section-content">{{ summary.sections.current_assessment }}</div></div>
+            {% endif %}
+            {% if summary.sections.clinical_details %}
+            <div class="summary-section"><div class="summary-section-title">Clinical Details</div><div class="summary-section-content">{{ summary.sections.clinical_details }}</div></div>
+            {% endif %}
+            {% if summary.sections.plan_of_care %}
+            <div class="summary-section"><div class="summary-section-title">Plan of Care</div><div class="summary-section-content">{{ summary.sections.plan_of_care }}</div></div>
+            {% endif %}
+          {% endif %}
+
+          {% if summary.risk_keywords.critical or summary.risk_keywords.high or summary.risk_keywords.medium %}
+          <div class="risk-section">
+            <div class="risk-title">Detected Risk Keywords</div>
+            <div class="risk-tags">
+              {% for kw in summary.risk_keywords.critical %}<span class="risk-tag risk-tag-critical">{{ kw }}</span>{% endfor %}
+              {% for kw in summary.risk_keywords.high %}<span class="risk-tag risk-tag-high">{{ kw }}</span>{% endfor %}
+              {% for kw in summary.risk_keywords.medium %}<span class="risk-tag risk-tag-medium">{{ kw }}</span>{% endfor %}
+            </div>
+            <div style="font-size:0.75rem;color:var(--muted-text);margin-top:0.25rem;">{{ summary.priority.reason }}</div>
+          </div>
+          {% endif %}
+
+          {% if summary.actions %}
+          <div class="risk-section">
+            <div class="risk-title">Suggested Next Actions</div>
+            <ul class="actions-list">{% for action in summary.actions %}<li>{{ action }}</li>{% endfor %}</ul>
+          </div>
+          {% endif %}
+
+        {% elif summary and summary.error %}
+          <div class="ai-error"><strong>Summary generation failed:</strong> {{ summary.error }}</div>
+          {% if summary.actions %}
+          <div class="risk-section" style="border-top:none;padding-top:0.5rem;">
+            <div class="summary-header" style="margin-bottom:0.5rem;">
+              <span class="priority-badge" style="background:{{ summary.priority.color }}">{{ summary.priority.level }} PRIORITY</span>
+            </div>
+            <div class="risk-title">Suggested Next Actions (rule-based)</div>
+            <ul class="actions-list">{% for action in summary.actions %}<li>{{ action }}</li>{% endfor %}</ul>
+          </div>
+          {% endif %}
+
+        {% else %}
+          <div class="ai-empty">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+            <p>AI-generated summary will appear here once a handoff note is submitted and processed.</p>
+          </div>
+        {% endif %}
       </div>
 
-    </div><!-- /right-col -->
+    </div>
   </div>
 </div>
 {% endblock %}
@@ -255,16 +311,13 @@
     { id: "{{ p.id }}", name: "{{ p.name }}", age: {{ p.age }}, gender: "{{ p.gender }}" }{% if not loop.last %},{% endif %}
     {% endfor %}
   ];
-
   document.addEventListener('DOMContentLoaded', function () {
     var navInput = document.getElementById('navSearchInput');
     var wrap = document.getElementById('navSearchWrap');
     if (!navInput || !wrap) return;
-
     var dropdown = document.createElement('div');
     dropdown.className = 'nav-dropdown';
     wrap.appendChild(dropdown);
-
     navInput.addEventListener('input', function () {
       var q = this.value.trim().toLowerCase();
       if (!q) { dropdown.classList.remove('open'); return; }
@@ -275,7 +328,6 @@
       }).join('');
       dropdown.classList.add('open');
     });
-
     navInput.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') {
         var q = this.value.trim().toLowerCase();
@@ -284,7 +336,6 @@
       }
       if (e.key === 'Escape') { dropdown.classList.remove('open'); }
     });
-
     document.addEventListener('click', function (e) {
       if (!wrap.contains(e.target)) dropdown.classList.remove('open');
     });
