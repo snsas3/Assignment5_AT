@@ -1,0 +1,18 @@
+kind = "web"
+previewPath = "/"
+title = "Green Valley Clinic"
+description = "A Python Flask web application for Green Valley Primary Care Clinic. Provides patient search, patient detail views with clinical handoff notes, and an admin dashboard. Uses hardcoded sample data with a Northern Lights dark/light theme."
+version = "1.0.0"
+id = "artifacts/clinic"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20964
+
+[services.development]
+run = "cd /home/runner/workspace/artifacts/clinic && exec python app.py"
+
+[services.env]
+PORT = "20964"

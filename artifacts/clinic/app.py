@@ -1,5 +1,6 @@
 import os
 import sys
+import hmac
 from datetime import datetime
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, session
@@ -275,8 +276,9 @@ def login():
         error = "Server is not configured with login credentials."
     elif request.method == "POST":
         username = request.form.get("username", "").strip().lower()
-        password = request.form.get("password", "")
-        if DEMO_USERS.get(username) == password:
+        password = request.form.get("password", "").strip()
+        expected_password = DEMO_USERS.get(username)
+        if expected_password and hmac.compare_digest(password, expected_password):
             session["username"] = username
             return redirect(next_url)
         valid_users = ", ".join(sorted(DEMO_USERS.keys()))
