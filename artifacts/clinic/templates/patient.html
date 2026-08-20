@@ -1,315 +1,1075 @@
-{% extends "base.html" %}
-{% block title %}{{ patient.name }} — Meridian Family Health{% endblock %}
-
-{% block nav_search %}
+{% extends "base.html" %} {% block title %}{{ patient.name }} — Meridian Family
+Health{% endblock %} {% block nav_search %}
 <div class="navbar-search" id="navSearchWrap">
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-  <input type="search" id="navSearchInput" placeholder="Search patients..." autocomplete="off" />
+  <svg
+    width="15"
+    height="15"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+  </svg>
+  <input
+    type="search"
+    id="navSearchInput"
+    placeholder="Search patients..."
+    autocomplete="off"
+  />
 </div>
-{% endblock %}
-
-{% block extra_head %}
+{% endblock %} {% block extra_head %}
 <style>
-  .patient-page { padding: 1.75rem 1.25rem 3rem; max-width: 1200px; margin: 0 auto; }
-  .page-header { display: flex; align-items: center; gap: 0.85rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
-  .back-btn {
-    display: inline-flex; align-items: center; gap: 0.3rem;
-    font-size: 0.8125rem; font-weight: 500; color: var(--muted-text);
-    padding: 0.35rem 0.75rem; border: 1px solid var(--card-border);
-    border-radius: 7px; transition: all 0.15s; flex-shrink: 0; text-decoration: none;
+  .pp {
+    padding: 1.25rem 1.25rem 3rem;
+    max-width: 920px;
+    margin: 0 auto;
   }
-  .back-btn:hover { color: var(--fg); border-color: var(--muted-text); background: var(--muted-bg); text-decoration: none; }
-  .patient-hdr-name { font-size: 1.25rem; font-weight: 700; color: var(--fg); }
-  .patient-hdr-meta { font-size: 0.8125rem; color: var(--muted-text); margin-top: 0.1rem; }
 
-  .patient-layout { display: grid; grid-template-columns: 1fr 375px; gap: 1.25rem; align-items: start; }
-  .left-col  { display: flex; flex-direction: column; gap: 1.25rem; }
-  .right-col { display: flex; flex-direction: column; gap: 1.25rem; }
+  /* Patient identity header */
+  .pident {
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .pident-name {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--fg);
+    line-height: 1.15;
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+  }
+  .name-back {
+    display: inline-flex;
+    align-items: center;
+    color: var(--muted-text);
+    margin-left: -0.3rem;
+    padding: 0.1rem;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: color 0.15s, background 0.15s;
+  }
+  .name-back:hover {
+    color: var(--primary);
+    background: var(--muted-bg);
+    text-decoration: none;
+  }
+  .pident-meta {
+    font-size: 0.8125rem;
+    color: var(--muted-text);
+    margin-top: 0.15rem;
+  }
+  .pident-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-bottom: 0.85rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--muted-text);
+    padding: 0.35rem 0.7rem;
+    border: 1px solid var(--card-border);
+    border-radius: 7px;
+    text-decoration: none;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .pident-back:hover {
+    color: var(--fg);
+    border-color: var(--muted-text);
+    background: var(--muted-bg);
+    text-decoration: none;
+  }
 
-  .demo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem 1.5rem; }
-  .demo-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted-text); margin-bottom: 0.1rem; }
-  .demo-value { font-size: 0.9rem; font-weight: 500; color: var(--fg); }
+  /* HERO SUMMARY */
+  .hero {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 1.4rem 1.5rem;
+    margin-bottom: 0.85rem;
+  }
+  .hero-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .hero-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.0625rem;
+    font-weight: 700;
+    color: var(--fg);
+  }
+  .hero-title .spark {
+    color: var(--primary);
+    font-size: 1.15rem;
+    line-height: 1;
+  }
+  .hero-meta {
+    font-size: 0.7rem;
+    color: var(--muted-text);
+  }
+  .hero-sub {
+    margin: 0.2rem 0 1.1rem;
+    font-size: 0.72rem;
+    color: var(--muted-text);
+  }
 
-  /* Vitals with history */
-  .vital-group { margin-bottom: 0.9rem; }
-  .vital-group:last-child { margin-bottom: 0; }
-  .vital-group-head {
-    display: flex; align-items: baseline; justify-content: space-between;
+  .hero-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.9rem 1.6rem;
+  }
+  @media (max-width: 640px) {
+    .hero-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  .sec-label {
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--primary);
+    margin-bottom: 0.25rem;
+  }
+  .sec-body {
+    margin: 0;
+    font-size: 0.8375rem;
+    line-height: 1.6;
+    color: var(--fg);
+  }
+
+  .hero-note-echo {
+    margin: 0 0 1.1rem;
+    background: var(--bg);
+    border-left: 3px solid var(--secondary);
+    border-radius: 0 8px 8px 0;
+    padding: 0.6rem 0.85rem;
+  }
+  .hero-note-echo .lbl {
+    font-size: 0.64rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--secondary);
+    margin-bottom: 0.2rem;
+  }
+  .hero-note-echo .txt {
+    font-size: 0.82rem;
+    font-style: italic;
+    color: var(--fg);
+    line-height: 1.55;
+  }
+
+  .hero-flagged {
+    border-top: 1px solid var(--card-border);
+    margin-top: 1rem;
+    padding-top: 0.7rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+  .hero-flagged .lbl {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted-text);
+  }
+  .kwtag {
+    font-size: 0.68rem;
+    border-radius: 9px;
+    padding: 1px 7px;
+  }
+  .kw-c {
+    background: rgba(220, 38, 38, 0.1);
+    color: #b91c1c;
+  }
+  .kw-h {
+    background: rgba(234, 88, 12, 0.1);
+    color: #c2410c;
+  }
+  .kw-m {
+    background: #faeeda;
+    color: #854f0b;
+  }
+
+  .hero-actions {
+    /* advisory next-step prompts */
+    margin-top: 0.25rem;
+  }
+  .prio-badge {
+    display: inline-block;
+    margin-left: 0.6rem;
+    padding: 0.14rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.64rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #fff;
+    background: var(--prio, var(--muted-text));
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  .prio-adj-tag {
+    display: inline-block;
+    margin-left: 0.35rem;
+    font-size: 0.58rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted-text);
+    background: var(--muted-bg);
+    padding: 0.12rem 0.45rem;
+    border-radius: 4px;
+    vertical-align: middle;
+  }
+  .prio-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    background: var(--muted-bg);
+    border-radius: 8px;
+    padding: 0.7rem 0.9rem;
+    margin-bottom: 1rem;
+    font-size: 0.82rem;
+    color: var(--fg);
+  }
+  .pb-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 0.35rem; flex-shrink: 0; }
+  .pb-sys { color: var(--muted-text); }
+  .pb-reason { font-style: italic; color: var(--muted-text); margin-top: 0.2rem; }
+  .prio-adjust {
+    margin-bottom: 1rem;
+    font-size: 0.82rem;
+  }
+  .prio-adjust > summary {
+    cursor: pointer;
+    color: var(--muted-text);
+    font-weight: 600;
+    padding: 0.3rem 0;
+    user-select: none;
+  }
+  .prio-adjust > summary:hover { color: var(--primary); }
+  .prio-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    margin-top: 0.6rem;
+    padding: 0.9rem;
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    background: var(--card-bg);
+  }
+  .pf-label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--fg);
+  }
+  .prio-form select, .prio-form textarea {
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 400;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    background: var(--input-bg);
+    color: var(--fg);
+    outline: none;
+  }
+  .prio-form textarea { min-height: 60px; resize: vertical; }
+  .prio-form select:focus, .prio-form textarea:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(52,168,90,0.15);
+  }
+  .prio-form .btn { align-self: flex-start; }
+  .act-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+  }
+  .act-tag {
+    font-size: 0.6rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted-text);
+    background: var(--muted-bg);
+    padding: 0.1rem 0.45rem;
+    border-radius: 4px;
+  }
+  .act-disclaimer {
+    font-size: 0.72rem;
+    color: var(--muted-text);
+    font-style: italic;
+    margin-top: 0.55rem;
+  }
+  .gen-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 500;
+  }
+  .gen-overlay.show { display: flex; }
+  .gen-box {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    background: var(--card-bg);
+    color: var(--fg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 1rem 1.4rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    box-shadow: var(--shadow-md);
+  }
+  .spinner {
+    width: 18px;
+    height: 18px;
+    border: 2.5px solid var(--muted-bg);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+    border-top: 1px solid var(--card-border);
+    margin-top: 0.9rem;
+    padding-top: 0.7rem;
+  }
+  .hero-actions .lbl {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted-text);
     margin-bottom: 0.35rem;
   }
-  .vital-type-name { font-size: 0.8rem; font-weight: 700; color: var(--fg); }
-  .vital-latest { font-size: 0.95rem; font-weight: 700; color: var(--primary); }
-  .vital-history { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-  .vital-chip {
-    font-size: 0.72rem; color: var(--muted-text);
-    background: var(--bg); border: 1px solid var(--card-border);
-    border-radius: 6px; padding: 0.15rem 0.5rem;
+  .act-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.2rem 1.2rem;
   }
-  .vital-chip.newest { border-color: var(--primary); color: var(--fg); font-weight: 600; }
-
-  .tag-list { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-
-  .note-item { border-left: 3px solid var(--primary); padding: 0.85rem 1rem; background: var(--bg); border-radius: 0 8px 8px 0; margin-bottom: 0.75rem; }
-  .note-item:last-child { margin-bottom: 0; }
-  .note-meta { font-size: 0.75rem; color: var(--muted-text); margin-bottom: 0.35rem; }
-  .note-meta strong { color: var(--fg); font-weight: 600; }
-  .note-content { font-size: 0.875rem; color: var(--fg); line-height: 1.6; }
-
-  .handoff-textarea {
-    width: 100%; min-height: 175px; padding: 0.85rem 1rem; font-size: 0.9rem;
-    resize: vertical; border-radius: 8px; border: 1px solid var(--input-border);
-    background: var(--input-bg); color: var(--fg); font-family: inherit;
-    line-height: 1.6; outline: none; transition: border-color 0.15s, box-shadow 0.15s; display: block;
+  @media (max-width: 640px) {
+    .act-list {
+      grid-template-columns: 1fr;
+    }
   }
-  .handoff-textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(52,168,90,0.15); }
-  .handoff-textarea::placeholder { color: var(--muted-text); }
-  .submit-row { display: flex; align-items: center; justify-content: space-between; margin-top: 0.75rem; gap: 0.75rem; flex-wrap: wrap; }
-  .submit-hint { font-size: 0.75rem; color: var(--muted-text); }
+  .act-list li {
+    font-size: 0.79rem;
+    color: var(--fg);
+    padding: 0.22rem 0 0.22rem 1.1rem;
+    position: relative;
+    line-height: 1.45;
+  }
+  .act-list li::before {
+    content: "\2192";
+    position: absolute;
+    left: 0;
+    color: var(--primary);
+    font-weight: 600;
+  }
 
-  .ai-empty { min-height: 110px; border: 2px dashed var(--card-border); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; padding: 1.5rem; text-align: center; }
-  .ai-empty p { font-size: 0.8125rem; color: var(--muted-text); max-width: 210px; line-height: 1.55; }
-  .ai-empty svg { color: var(--muted-text); opacity: 0.45; }
+  .hero-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1.4rem;
+    text-align: center;
+  }
+  .hero-empty p {
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--muted-text);
+    max-width: 300px;
+    line-height: 1.55;
+  }
+  .hero-empty .spark {
+    font-size: 1.6rem;
+    color: var(--muted-text);
+    opacity: 0.4;
+  }
+  .hero-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1.4rem;
+    color: var(--muted-text);
+    font-size: 0.82rem;
+  }
 
-  .summary-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
-  .priority-badge { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.3rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; color: #ffffff; }
-  .summary-meta { font-size: 0.7rem; color: var(--muted-text); }
-  .summary-section { margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--card-border); }
-  .summary-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
-  .summary-section-title { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--primary); margin-bottom: 0.4rem; }
-  .summary-section-content { font-size: 0.85rem; line-height: 1.65; color: var(--fg); }
+  .hero-err {
+    background: rgba(239, 68, 68, 0.07);
+    border: 1px solid rgba(239, 68, 68, 0.22);
+    border-radius: 8px;
+    padding: 0.75rem 0.9rem;
+    font-size: 0.82rem;
+    color: var(--fg);
+    line-height: 1.5;
+    margin-bottom: 0.9rem;
+  }
+  .hero-err strong {
+    color: var(--destructive);
+  }
 
-  .risk-section { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--card-border); }
-  .risk-title { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted-text); margin-bottom: 0.5rem; }
-  .risk-tags { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.5rem; }
-  .risk-tag { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 12px; font-size: 0.7rem; font-weight: 500; }
-  .risk-tag-critical { background: rgba(220,38,38,0.12); color: #dc2626; }
-  .risk-tag-high { background: rgba(234,88,12,0.12); color: #ea580c; }
-  .risk-tag-medium { background: rgba(202,138,4,0.12); color: #ca8a04; }
+  /* NOTE CARD */
+  .nextsteps {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-left: 3px solid var(--primary);
+    border-radius: 12px;
+    padding: 1.1rem 1.5rem 1.25rem;
+    box-shadow: var(--shadow);
+    margin-bottom: 1.75rem;
+  }
+  .ns-head {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.7rem;
+  }
+  .ns-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--fg);
+  }
+  .ns-tag {
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted-text);
+    background: var(--muted-bg);
+    padding: 0.14rem 0.5rem;
+    border-radius: 4px;
+  }
+  .ns-list {
+    list-style: none;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.4rem 1.5rem;
+    margin: 0;
+    padding: 0;
+  }
+  .ns-list li {
+    font-size: 0.85rem;
+    color: var(--fg);
+    padding-left: 1.1rem;
+    position: relative;
+    line-height: 1.4;
+  }
+  .ns-list li::before {
+    content: "\2192";
+    position: absolute;
+    left: 0;
+    color: var(--primary);
+    font-weight: 700;
+  }
+  .ns-disclaimer {
+    font-size: 0.72rem;
+    color: var(--muted-text);
+    font-style: italic;
+    margin-top: 0.8rem;
+  }
+  @media (max-width: 640px) {
+    .ns-list { grid-template-columns: 1fr; }
+  }
+  .notebar {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 1.75rem;
+  }
+  .notebar .lbl {
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted-text);
+    margin-bottom: 0.4rem;
+  }
+  .ta-wrap { position: relative; }
+  .mic-inline {
+    position: absolute;
+    right: 0.6rem;
+    bottom: 0.6rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--muted-text);
+    padding: 0.2rem;
+    display: inline-flex;
+    border-radius: 6px;
+    transition: color 0.15s, background 0.15s;
+  }
+  .mic-inline:hover { color: var(--primary); background: var(--muted-bg); }
+  .notebar textarea {
+    width: 100%;
+    min-height: 64px;
+    padding: 0.65rem 2.4rem 0.65rem 0.85rem;
+    font-size: 0.875rem;
+    font-family: inherit;
+    line-height: 1.5;
+    border: 1px solid var(--input-border);
+    background: var(--input-bg);
+    color: var(--fg);
+    border-radius: 8px;
+    outline: none;
+    resize: vertical;
+    transition:
+      border-color 0.15s,
+      box-shadow 0.15s;
+    display: block;
+  }
+  .notebar textarea:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(52, 168, 90, 0.15);
+  }
+  .notebar textarea::placeholder {
+    color: var(--muted-text);
+  }
+  .notebar-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 0.6rem;
+    flex-wrap: wrap;
+  }
+  .notebar-hint {
+    font-size: 0.72rem;
+    color: var(--muted-text);
+  }
 
-  .actions-list { list-style: none; padding: 0; margin: 0; }
-  .actions-list li { font-size: 0.82rem; color: var(--fg); padding: 0.4rem 0; padding-left: 1.2rem; position: relative; line-height: 1.5; }
-  .actions-list li::before { content: "→"; position: absolute; left: 0; color: var(--primary); font-weight: 600; }
+  /* SECTION DIVIDER */
+  .rec-div {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0 0 1rem;
+  }
+  .rec-div::before,
+  .rec-div::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--card-border);
+  }
+  .rec-div span {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted-text);
+  }
 
-  .ai-error { padding: 1rem; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); border-radius: 8px; color: var(--destructive); font-size: 0.85rem; line-height: 1.5; }
+  /* DETAIL GRID */
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.85rem;
+  }
+  @media (max-width: 760px) {
+    .detail-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  .dcard {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 1rem 1.15rem;
+  }
+  .dcard-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--fg);
+    margin-bottom: 0.7rem;
+  }
 
-  .handoff-echo { background: var(--bg); border-left: 3px solid var(--secondary); border-radius: 0 8px 8px 0; padding: 0.75rem 1rem; margin-bottom: 1rem; }
-  .handoff-echo-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--secondary); margin-bottom: 0.3rem; }
-  .handoff-echo-text { font-size: 0.85rem; color: var(--fg); line-height: 1.6; font-style: italic; }
+  /* quiet-label demographics */
+  .demo-rows {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.45rem 1rem;
+    font-size: 0.8125rem;
+    font-family: inherit; /* keep everything on Inter — no stray fallback font */
+    font-variant-numeric: tabular-nums;
+  }
+  .demo-rows .k {
+    color: var(--muted-text);
+  }
+  .demo-rows .v {
+    color: var(--fg);
+  }
 
-  .doctor-line { font-size: 0.8rem; color: var(--muted-text); margin-top: 0.25rem; }
-  .doctor-line strong { color: var(--fg); font-weight: 600; }
+  /* vitals table */
+  .vt {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    table-layout: fixed; /* equal-width, equidistant columns */
+    font-variant-numeric: tabular-nums; /* numbers line up cleanly */
+  }
+  .vt th {
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.72rem;
+    line-height: 1.25;
+    color: var(--muted-text);
+    padding: 0 0.25rem 0.5rem;
+    white-space: normal;
+    word-break: break-word;
+  }
+  .vt td {
+    text-align: center;
+    padding: 0.45rem 0;
+    color: var(--muted-text);
+  }
+  .vt tbody tr {
+    border-top: 1px solid var(--card-border);
+  }
+  .vt tbody tr:first-child td {
+    color: var(--fg);
+    font-weight: 600;
+  }
 
-  .nav-dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; box-shadow: var(--shadow-md); z-index: 200; overflow: hidden; display: none; }
-  .nav-dropdown.open { display: block; }
-  .nav-drop-item { display: flex; align-items: center; gap: 0.7rem; padding: 0.6rem 0.9rem; text-decoration: none; color: var(--fg); font-size: 0.875rem; transition: background 0.1s; }
-  .nav-drop-item:hover { background: var(--muted-bg); text-decoration: none; }
-  .nav-drop-item strong { font-weight: 600; }
-  .nav-drop-item span { font-size: 0.75rem; color: var(--muted-text); }
+  .tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .med-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.35rem;
+  }
 
-  @media (min-width: 1024px) { .right-col { position: sticky; top: 76px; } }
-  @media (max-width: 900px) { .patient-layout { grid-template-columns: 1fr; } .right-col { position: static; } }
-  @media (max-width: 640px) { .patient-page { padding: 1.25rem 1rem 2.5rem; } .demo-grid { grid-template-columns: 1fr; } }
+  .note-item {
+    border-left: 3px solid var(--primary);
+    padding: 0.7rem 0.9rem;
+    background: var(--bg);
+    border-radius: 0 8px 8px 0;
+    margin-bottom: 0.6rem;
+  }
+  .note-item:last-child {
+    margin-bottom: 0;
+  }
+  .note-meta {
+    font-size: 0.72rem;
+    color: var(--muted-text);
+    margin-bottom: 0.25rem;
+  }
+  .note-meta strong {
+    color: var(--fg);
+    font-weight: 600;
+  }
+  .note-content {
+    font-size: 0.82rem;
+    color: var(--fg);
+    line-height: 1.55;
+  }
+
+  .span-2 {
+    grid-column: 1 / -1;
+  }
+
+  .nav-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    box-shadow: var(--shadow-md);
+    z-index: 200;
+    overflow: hidden;
+    display: none;
+  }
+  .nav-dropdown.open {
+    display: block;
+  }
+  .nav-drop-item {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.6rem 0.9rem;
+    text-decoration: none;
+    color: var(--fg);
+    font-size: 0.875rem;
+  }
+  .nav-drop-item:hover {
+    background: var(--muted-bg);
+    text-decoration: none;
+  }
+  .nav-drop-item span {
+    font-size: 0.75rem;
+    color: var(--muted-text);
+  }
 </style>
-{% endblock %}
-
-{% block content %}
-<div class="patient-page">
-  <div class="page-header">
-    <a href="/" class="back-btn">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-      Back
-    </a>
+{% endblock %} {% block content %}
+<div class="pp">
+  <!-- Patient identity -->
+  <div class="pident">
     <div>
-      <div class="patient-hdr-name">{{ patient.name }}</div>
-      <div class="patient-hdr-meta">{{ patient.gender }} &middot; Age {{ patient.age }} &middot; DOB {{ patient.dob }}</div>
+      <div class="pident-name">
+        <a
+          href="/"
+          class="name-back"
+          aria-label="Back to patient search"
+          title="Back to search"
+        >
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="15 18 9 12 15 6" />
+          </svg> </a
+        >{{ patient.name }}
+      </div>
+      <div class="pident-meta">
+        {{ patient.gender }} &middot; Age {{ patient.age }} &middot; DOB {{
+        patient.dob }}{% if patient.doctor %} &middot; {{ patient.doctor.name
+        }}{% endif %}
+      </div>
     </div>
   </div>
 
-  <div class="patient-layout">
-    <!-- Left Column -->
-    <div class="left-col">
-
-      <div class="card">
-        <div class="card-title">Demographics</div>
-        <div class="demo-grid">
-          <div><div class="demo-label">Date of Birth</div><div class="demo-value">{{ patient.dob }}</div></div>
-          <div><div class="demo-label">Gender</div><div class="demo-value">{{ patient.gender }}</div></div>
-          <div><div class="demo-label">Phone</div><div class="demo-value">{{ patient.phone }}</div></div>
-          <div><div class="demo-label">Address</div><div class="demo-value">{{ patient.address }}</div></div>
-          <div><div class="demo-label">Insurance</div><div class="demo-value">{{ patient.insurance }}</div></div>
-          {% if patient.doctor %}
-          <div><div class="demo-label">Assigned Doctor</div><div class="demo-value">{{ patient.doctor.name }}</div></div>
-          {% endif %}
-        </div>
-        {% if patient.doctor %}
-        <div class="doctor-line"><strong>{{ patient.doctor.name }}</strong> &middot; {{ patient.doctor.specialty }}</div>
-        {% endif %}
+  <!-- ══ HERO: CLINICAL SUMMARY ══ -->
+  <div class="hero">
+    <div class="hero-head">
+      <div class="hero-title">
+        <span class="spark">&#10022;</span> Clinical Summary {% if summary and
+        summary.generated %} {% if override %}
+        <span
+          class="prio-badge"
+          style="--prio: {{ override.color }}"
+          title="Adjusted by {{ override.doctor_username }}"
+          >{{ override.override_priority }} priority</span
+        >
+        <span class="prio-adj-tag">clinician-adjusted</span>
+        {% elif summary.priority %}
+        <span
+          class="prio-badge"
+          style="--prio: {{ summary.priority.color }}"
+          title="{{ summary.priority.reason }}"
+          >{{ summary.priority.level }} priority</span
+        >
+        {% endif %} {% endif %}
       </div>
+      {% if summary and summary.generated %}
+      <div class="hero-meta">Updated {{ summary.generated_at }}</div>
+      {% endif %}
+    </div>
+    <p class="hero-sub">
+      AI-generated from the patient record &middot; non-diagnostic &middot;
+      verify before acting
+    </p>
 
-      <div class="card">
-        <div class="card-title">Recent Vitals <span class="text-sm text-muted">(last 3 readings)</span></div>
-        {% if patient.vitals_grouped %}
-          {% for vtype, readings in patient.vitals_grouped.items() %}
-          <div class="vital-group">
-            <div class="vital-group-head">
-              <span class="vital-type-name">{{ vtype }}</span>
-              {% if readings %}
-              <span class="vital-latest">{{ readings[0].reading }} {{ readings[0].unit }}</span>
-              {% endif %}
-            </div>
-            <div class="vital-history">
-              {% for r in readings %}
-              <span class="vital-chip {% if loop.first %}newest{% endif %}">{{ r.reading }} {{ r.unit }} &middot; {{ r.recorded_at }}</span>
-              {% endfor %}
-            </div>
-          </div>
-          {% endfor %}
-        {% else %}
-          <p class="text-sm text-muted">No vitals on file.</p>
-        {% endif %}
+    {% if summary and summary.generated %} {% if override %}
+    <div class="prio-banner">
+      <span class="pb-dot" style="background: {{ override.color }}"></span>
+      <div>
+        <strong>Priority adjusted to {{ override.override_priority }}</strong>
+        by {{ override.doctor_username }}{% if override.at %} &middot; {{
+        override.at }}{% endif %}.
+        <span class="pb-sys"
+          >System suggested {{ override.system_priority }}.</span
+        >
+        <div class="pb-reason">&ldquo;{{ override.reason }}&rdquo;</div>
       </div>
+    </div>
+    {% endif %} {% if is_doctor %}
+    <details class="prio-adjust">
+      <summary>Adjust priority &amp; record reason</summary>
+      <form method="POST" action="/override-priority" class="prio-form">
+        <input type="hidden" name="patient_id" value="{{ patient.id }}" />
+        <label class="pf-label"
+          >Set priority
+          <select name="override_priority" required>
+            <option value="">Select level…</option>
+            {% for lvl in priority_levels %}
+            <option value="{{ lvl }}">{{ lvl }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="pf-label"
+          >Reason (recorded as clinician feedback)
+          <textarea
+            name="reason"
+            required
+            minlength="3"
+            placeholder="Why does your clinical judgment differ from the system's assessment?"
+          ></textarea>
+        </label>
+        <button type="submit" class="btn btn-primary">Save adjustment</button>
+      </form>
+    </details>
+    {% endif %} {% endif %} {% if summary and summary.generated %} {% if
+    summary.handoff_note %}
+    <div class="hero-note-echo">
+      <div class="lbl">Latest handoff note</div>
+      <div class="txt">{{ summary.handoff_note }}</div>
+    </div>
+    {% endif %}
 
-      <div class="card">
-        <div class="card-title">Active Conditions</div>
-        <div class="tag-list">
-          {% for c in patient.conditions %}
-          <span class="badge badge-condition">{{ c }}</span>
-          {% else %}
-          <span class="text-sm text-muted">No active conditions recorded.</span>
-          {% endfor %}
-        </div>
+    <div class="hero-grid">
+      {% if summary.sections.medical_history %}
+      <div>
+        <div class="sec-label">History &amp; Status</div>
+        <p class="sec-body">{{ summary.sections.medical_history }}</p>
       </div>
-
-      <div class="card">
-        <div class="card-title">Current Medications</div>
-        <div style="display:flex;flex-direction:column;gap:0.5rem;">
-          {% for m in patient.medications %}
-          <div style="display:flex;align-items:baseline;gap:0.6rem;flex-wrap:wrap;">
-            <span class="badge badge-med">{{ m.name }}</span>
-            <span class="text-sm text-muted">{{ m.dose }}</span>
-          </div>
-          {% else %}
-          <span class="text-sm text-muted">No current medications recorded.</span>
-          {% endfor %}
-        </div>
+      {% endif %} {% if summary.sections.current_assessment %}
+      <div>
+        <div class="sec-label">Current Assessment</div>
+        <p class="sec-body">{{ summary.sections.current_assessment }}</p>
       </div>
-
-      <div class="card">
-        <div class="card-title">Past Clinical Notes</div>
-        {% for note in patient.notes %}
-        <div class="note-item">
-          <div class="note-meta"><strong>{{ note.provider }}</strong> &middot; {{ note.note_date }}</div>
-          <div class="note-content">{{ note.content }}</div>
-        </div>
-        {% else %}
-        <p class="text-sm text-muted">No past clinical notes on file.</p>
-        {% endfor %}
+      {% endif %} {% if summary.sections.clinical_details %}
+      <div>
+        <div class="sec-label">Clinical Details</div>
+        <p class="sec-body">{{ summary.sections.clinical_details }}</p>
       </div>
+      {% endif %} {% if summary.sections.plan_of_care %}
+      <div>
+        <div class="sec-label">Plan of Care</div>
+        <p class="sec-body">{{ summary.sections.plan_of_care }}</p>
+      </div>
+      {% endif %}
+    </div>
+    {% elif summary and summary.error %}
+    <div class="hero-err">
+      <strong>Summary unavailable:</strong> {{ summary.error }}
+    </div>
+    {% else %}
+    <div class="hero-empty">
+      <span class="spark">&#10022;</span>
+      <p>
+        Add a handoff note below to generate a structured clinical summary from
+        this patient's record.
+      </p>
+    </div>
+    {% endif %}
+  </div>
 
+  <!-- ══ SUGGESTED NEXT STEPS (separate, rule-based, advisory) ══ -->
+  {% if summary and summary.generated and summary.actions %}
+  <div class="nextsteps">
+    <div class="ns-head">
+      <div class="ns-title">Suggested Next Steps</div>
+      <span class="ns-tag">System-generated &middot; advisory</span>
+    </div>
+    <ul class="ns-list">
+      {% for a in summary.actions %}
+      <li>{{ a }}</li>
+      {% endfor %}
+    </ul>
+    <p class="ns-disclaimer">
+      Produced by a rule-based layer from the patient record, to support the
+      clinician's review — not medical advice. Apply your own clinical judgment.
+    </p>
+  </div>
+  {% endif %}
+
+  <!-- ══ NOTE CARD ══ -->
+  <div class="notebar">
+    <form method="POST" action="/submit-note">
+      <input type="hidden" name="patient_id" value="{{ patient.id }}" />
+      <div class="lbl">Add handoff note</div>
+      <div class="ta-wrap">
+        <textarea
+          name="note_content"
+          placeholder="Type your note here,the summary updates when you submit.."
+        ></textarea>
+        <button
+          type="button"
+          class="mic-inline"
+          title="Voice input (demo)"
+          aria-label="Voice input (demo)"
+          onclick="return false;"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+            <line x1="12" y1="19" x2="12" y2="23" />
+            <line x1="8" y1="23" x2="16" y2="23" />
+          </svg>
+        </button>
+      </div>
+      <div class="notebar-row">
+        <span class="notebar-hint"
+          >Saved to the record and used to update the summary</span
+        >
+        <button type="submit" class="btn btn-primary">
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <line x1="22" y1="2" x2="11" y2="13" />
+            <polygon points="22 2 15 22 11 13 2 9 22 2" />
+          </svg>
+          Update Summary
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ══ PATIENT RECORD ══ -->
+  <div class="rec-div"><span>Patient Record</span></div>
+
+  <div class="detail-grid">
+    <div class="dcard">
+      <div class="dcard-title">Demographics</div>
+      <div class="demo-rows">
+        <span class="k">Date of birth</span
+        ><span class="v">{{ patient.dob }}</span> <span class="k">Gender</span
+        ><span class="v">{{ patient.gender }}</span> <span class="k">Phone</span
+        ><span class="v">{{ patient.phone }}</span>
+        <span class="k">Insurance</span
+        ><span class="v">{{ patient.insurance }}</span> {% if patient.doctor
+        %}<span class="k">Doctor</span
+        ><span class="v">{{ patient.doctor.name }}</span>{% endif %}
+        <span class="k">Address</span
+        ><span class="v">{{ patient.address }}</span>
+      </div>
     </div>
 
-    <!-- Right Column -->
-    <div class="right-col">
+    <div class="dcard">
+      <div class="dcard-title">Recent vitals</div>
+      {% if patient.vitals_table and patient.vitals_table.rows %}
+      <table class="vt">
+        <thead>
+          <tr>
+            <th>Date</th>
+            {% for col in patient.vitals_table.columns %}
+            <th>{{ col }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in patient.vitals_table.rows %}
+          <tr>
+            <td>{{ row.date }}</td>
+            {% for col in patient.vitals_table.columns %}
+            <td>{{ row["values"].get(col, "—") }}</td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="text-sm text-muted">No vitals on file.</p>
+      {% endif %}
+    </div>
 
-      <div class="card">
-        <div class="card-title">Clinical Handoff Note</div>
-        <form method="POST" action="/submit-note">
-          <input type="hidden" name="patient_id" value="{{ patient.id }}" />
-          <textarea class="handoff-textarea" name="note_content"
-            placeholder="Enter clinical handoff note for {{ patient.name }}...&#10;&#10;Include current status, pending tasks, follow-up items, and any urgent concerns."
-          >{% if summary and summary.handoff_note %}{{ summary.handoff_note }}{% endif %}</textarea>
-          <div class="submit-row">
-            <span class="submit-hint">Note will be saved and summarized</span>
-            <button type="submit" class="btn btn-primary">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-              Submit Note
-            </button>
-          </div>
-        </form>
+    <div class="dcard">
+      <div class="dcard-title">Active conditions</div>
+      <div class="tag-list">
+        {% for c in patient.conditions %}<span class="badge badge-condition"
+          >{{ c }}</span
+        >{% else %}<span class="text-sm text-muted">None recorded.</span>{%
+        endfor %}
       </div>
-
-      <div class="card">
-        <div class="card-title">AI Clinical Summary</div>
-
-        {% if summary and summary.generated %}
-          <div class="summary-header">
-            <span class="priority-badge" style="background:{{ summary.priority.color }}">{{ summary.priority.level }} PRIORITY</span>
-            <span class="summary-meta">Generated {{ summary.generated_at }} by {{ summary.generated_by }}</span>
-          </div>
-
-          <div class="handoff-echo">
-            <div class="handoff-echo-label">Outgoing Clinician's Note</div>
-            <div class="handoff-echo-text">{{ summary.handoff_note }}</div>
-          </div>
-
-          {% if summary.sections %}
-            {% if summary.sections.patient_identification %}
-            <div class="summary-section"><div class="summary-section-title">Patient Identification</div><div class="summary-section-content">{{ summary.sections.patient_identification }}</div></div>
-            {% endif %}
-            {% if summary.sections.medical_history %}
-            <div class="summary-section"><div class="summary-section-title">Medical History & Status</div><div class="summary-section-content">{{ summary.sections.medical_history }}</div></div>
-            {% endif %}
-            {% if summary.sections.current_assessment %}
-            <div class="summary-section"><div class="summary-section-title">Current Assessment</div><div class="summary-section-content">{{ summary.sections.current_assessment }}</div></div>
-            {% endif %}
-            {% if summary.sections.clinical_details %}
-            <div class="summary-section"><div class="summary-section-title">Clinical Details</div><div class="summary-section-content">{{ summary.sections.clinical_details }}</div></div>
-            {% endif %}
-            {% if summary.sections.plan_of_care %}
-            <div class="summary-section"><div class="summary-section-title">Plan of Care</div><div class="summary-section-content">{{ summary.sections.plan_of_care }}</div></div>
-            {% endif %}
-          {% endif %}
-
-          {% if summary.risk_keywords.critical or summary.risk_keywords.high or summary.risk_keywords.medium %}
-          <div class="risk-section">
-            <div class="risk-title">Detected Risk Keywords</div>
-            <div class="risk-tags">
-              {% for kw in summary.risk_keywords.critical %}<span class="risk-tag risk-tag-critical">{{ kw }}</span>{% endfor %}
-              {% for kw in summary.risk_keywords.high %}<span class="risk-tag risk-tag-high">{{ kw }}</span>{% endfor %}
-              {% for kw in summary.risk_keywords.medium %}<span class="risk-tag risk-tag-medium">{{ kw }}</span>{% endfor %}
-            </div>
-            <div style="font-size:0.75rem;color:var(--muted-text);margin-top:0.25rem;">{{ summary.priority.reason }}</div>
-          </div>
-          {% endif %}
-
-          {% if summary.actions %}
-          <div class="risk-section">
-            <div class="risk-title">Suggested Next Actions</div>
-            <ul class="actions-list">{% for action in summary.actions %}<li>{{ action }}</li>{% endfor %}</ul>
-          </div>
-          {% endif %}
-
-        {% elif summary and summary.error %}
-          <div class="ai-error"><strong>Summary generation failed:</strong> {{ summary.error }}</div>
-          {% if summary.actions %}
-          <div class="risk-section" style="border-top:none;padding-top:0.5rem;">
-            <div class="summary-header" style="margin-bottom:0.5rem;">
-              <span class="priority-badge" style="background:{{ summary.priority.color }}">{{ summary.priority.level }} PRIORITY</span>
-            </div>
-            <div class="risk-title">Suggested Next Actions (rule-based)</div>
-            <ul class="actions-list">{% for action in summary.actions %}<li>{{ action }}</li>{% endfor %}</ul>
-          </div>
-          {% endif %}
-
-        {% else %}
-          <div class="ai-empty">
-            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
-            <p>AI-generated summary will appear here once a handoff note is submitted and processed.</p>
-          </div>
-        {% endif %}
+      <div class="dcard-title" style="margin-top: 1rem">
+        Current medications
       </div>
+      {% for m in patient.medications %}
+      <div class="med-row">
+        <span class="badge badge-med">{{ m.name }}</span
+        ><span class="text-sm text-muted">{{ m.dose }}</span>
+      </div>
+      {% else %}<span class="text-sm text-muted">None recorded.</span>{% endfor
+      %}
+    </div>
 
+    <div class="dcard">
+      <div class="dcard-title">Past clinical notes</div>
+      {% for note in patient.notes %}
+      <div class="note-item">
+        <div class="note-meta">
+          <strong>{{ note.provider }}</strong> &middot; {{ note.note_date }}
+        </div>
+        <div class="note-content">{{ note.content }}</div>
+      </div>
+      {% else %}
+      <p class="text-sm text-muted">No past notes on file.</p>
+      {% endfor %}
     </div>
   </div>
 </div>
-{% endblock %}
-
-{% block extra_scripts %}
+<div id="genOverlay" class="gen-overlay">
+  <div class="gen-box"><span class="spinner"></span> Generating summary…</div>
+</div>
+{% endblock %} {% block extra_scripts %}
 <script>
+  (function () {
+    var noteForm = document.querySelector('form[action="/submit-note"]');
+    var overlay = document.getElementById('genOverlay');
+    if (noteForm && overlay) {
+      noteForm.addEventListener('submit', function () {
+        var ta = noteForm.querySelector('textarea[name="note_content"]');
+        if (ta && ta.value.trim().length < 3) return; // let server-side validation respond
+        overlay.classList.add('show');
+        var b = noteForm.querySelector('button[type="submit"]');
+        if (b) { b.disabled = true; b.style.opacity = '0.7'; }
+        // Safety net: never let the overlay stick if navigation is slow/interrupted
+        setTimeout(function () { overlay.classList.remove('show'); }, 12000);
+      });
+    }
+  })();
+
   var ALL_PATIENTS = [
-    {% for p in patients %}
-    { id: "{{ p.id }}", name: "{{ p.name }}", age: {{ p.age }}, gender: "{{ p.gender }}" }{% if not loop.last %},{% endif %}
-    {% endfor %}
+    {% for p in patients %}{ id: "{{ p.id }}", name: "{{ p.name }}", age: {{ p.age }}, gender: "{{ p.gender }}" }{% if not loop.last %},{% endif %}{% endfor %}
   ];
   document.addEventListener('DOMContentLoaded', function () {
     var navInput = document.getElementById('navSearchInput');
@@ -329,16 +1089,10 @@
       dropdown.classList.add('open');
     });
     navInput.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') {
-        var q = this.value.trim().toLowerCase();
-        var m = ALL_PATIENTS.find(function (p) { return p.name.toLowerCase().includes(q); });
-        if (m) window.location.href = '/patient/' + m.id;
-      }
+      if (e.key === 'Enter') { var q=this.value.trim().toLowerCase(); var m=ALL_PATIENTS.find(function(p){return p.name.toLowerCase().includes(q);}); if(m) window.location.href='/patient/'+m.id; }
       if (e.key === 'Escape') { dropdown.classList.remove('open'); }
     });
-    document.addEventListener('click', function (e) {
-      if (!wrap.contains(e.target)) dropdown.classList.remove('open');
-    });
+    document.addEventListener('click', function (e) { if (!wrap.contains(e.target)) dropdown.classList.remove('open'); });
   });
 </script>
 {% endblock %}

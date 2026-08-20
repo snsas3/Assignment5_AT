@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Admin Dashboard — Green Valley Primary Care Clinic{% endblock %}
+{% block title %}Admin Dashboard — Meridian Family Health{% endblock %}
 {% block nav_search %}{% endblock %}
 
 {% block extra_head %}
@@ -31,6 +31,69 @@
 
   /* Activity log */
   .activity-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem 1.5rem; box-shadow: var(--shadow); }
+  .activity-hdr { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.4rem; flex-wrap: wrap; }
+  .chart-caption { font-size: 0.72rem; color: var(--muted-text); margin-bottom: 0.9rem; }
+  .prio-dist { display: flex; flex-direction: column; gap: 0.55rem; }
+  .pd-row { display: flex; align-items: center; gap: 0.7rem; }
+  .pd-label {
+    flex: 0 0 96px;
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--muted-text);
+    text-align: right;
+  }
+  .pd-track {
+    flex: 1;
+    height: 18px;
+    background: var(--muted-bg);
+    border-radius: 5px;
+    overflow: hidden;
+  }
+  .pd-bar {
+    height: 100%;
+    border-radius: 5px;
+    min-width: 2px;
+    transition: width 0.4s ease;
+  }
+  .pd-count {
+    flex: 0 0 22px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--fg);
+    text-align: left;
+    font-variant-numeric: tabular-nums;
+  }
+  .log-filter {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.8125rem;
+    font-family: inherit;
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    background: var(--input-bg);
+    color: var(--fg);
+    outline: none;
+    min-width: 220px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .log-filter:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(52,168,90,0.15); }
+  .prio-pill {
+    display: inline-block;
+    padding: 0.12rem 0.55rem;
+    border-radius: 20px;
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #fff;
+    white-space: nowrap;
+  }
+  .prio-critical  { background: #dc2626; }
+  .prio-high      { background: #ea580c; }
+  .prio-mediumhigh{ background: #d97706; }
+  .prio-medium    { background: #ca8a04; }
+  .prio-low       { background: #16a34a; }
 
   @media (max-width: 900px) {
     .stats-grid  { grid-template-columns: 1fr 1fr; }
@@ -49,7 +112,7 @@
 
   <div class="admin-hdr">
     <h1 class="admin-title">Admin Dashboard</h1>
-    <p class="admin-sub">Green Valley Primary Care Clinic &nbsp;&middot;&nbsp; Usage &amp; Activity Overview</p>
+    <p class="admin-sub">Meridian Family Health &nbsp;&middot;&nbsp; Usage &amp; Activity Overview</p>
   </div>
 
   <!-- Stats -->
@@ -67,22 +130,52 @@
     <div class="stat-card">
       <div class="stat-label">Failed Generations</div>
       <div class="stat-value">{{ stats.total_failed_generations }}</div>
-      <div class="stat-desc">{{ "%.1f"|format((stats.total_failed_generations / stats.total_summaries_generated * 100) if stats.total_summaries_generated else 0) }}% failure rate</div>
+      <div class="stat-desc">{{ "%.1f"|format((stats.total_failed_generations / (stats.total_summaries_generated + stats.total_failed_generations) * 100) if (stats.total_summaries_generated + stats.total_failed_generations) else 0) }}% failure rate</div>
     </div>
   </div>
 
   <!-- Chart + Log -->
   <div class="bottom-grid">
 
+    <div class="chart-card" style="margin-bottom:1.25rem">
+      <div class="section-title" style="margin-bottom:0.2rem">Priority Distribution</div>
+      <div class="chart-caption">Across all handoffs to date</div>
+      {% set order = [
+        ("CRITICAL", "#dc2626"),
+        ("HIGH", "#ea580c"),
+        ("MEDIUM-HIGH", "#d97706"),
+        ("MEDIUM", "#ca8a04"),
+        ("LOW", "#16a34a")
+      ] %}
+      {% set pb = stats.priority_breakdown %}
+      {% set maxv = (pb.values() | list | max) if pb else 0 %}
+      <div class="prio-dist">
+        {% for level, color in order %}
+        {% set count = pb.get(level, 0) %}
+        <div class="pd-row">
+          <span class="pd-label">{{ level }}</span>
+          <div class="pd-track">
+            <div class="pd-bar" style="width: {{ ((count / maxv * 100) if maxv else 0) }}%; background: {{ color }};"></div>
+          </div>
+          <span class="pd-count">{{ count }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
     <div class="chart-card">
-      <div class="section-title">Summaries Generated Per Day</div>
+      <div class="section-title" style="margin-bottom:0.2rem">Summaries Generated Per Day</div>
+      <div class="chart-caption">Rolling 7-day view &middot; counts per day</div>
       <div class="chart-wrap">
         <canvas id="summaryChart"></canvas>
       </div>
     </div>
 
     <div class="activity-card">
-      <div class="section-title">Recent Activity Log</div>
+      <div class="activity-hdr">
+        <div class="section-title" style="margin-bottom:0">Recent Activity Log</div>
+        <input type="search" id="logFilter" class="log-filter" placeholder="Search by doctor or patient..." autocomplete="off" />
+      </div>
       <div class="table-wrap">
         <table>
           <thead>
@@ -90,15 +183,23 @@
               <th>Timestamp</th>
               <th>Doctor</th>
               <th>Patient</th>
+              <th>Priority</th>
               <th>Action</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="logBody">
             {% for row in stats.activity_log %}
-            <tr>
+            <tr class="log-row" data-search="{{ (row.doctor ~ ' ' ~ row.patient) | lower }}">
               <td class="text-sm text-muted" style="white-space:nowrap">{{ row.timestamp }}</td>
               <td class="text-sm font-semibold">{{ row.doctor }}</td>
               <td class="text-sm">{{ row.patient }}</td>
+              <td>
+                {% if row.priority %}
+                <span class="prio-pill prio-{{ row.priority | lower | replace('-', '') }}">{{ row.priority }}</span>
+                {% else %}
+                <span class="text-sm text-muted">—</span>
+                {% endif %}
+              </td>
               <td>
                 {% if row.action == "Generated Summary" %}
                   <span class="badge badge-success">{{ row.action }}</span>
@@ -112,6 +213,7 @@
             {% endfor %}
           </tbody>
         </table>
+        <p id="logNoMatch" class="text-sm text-muted" style="display:none;padding:1rem 0 0.25rem">No records match that filter.</p>
       </div>
     </div>
 
@@ -164,11 +266,12 @@
           scales: {
             x: {
               grid: { display: false },
-              ticks: { color: mutedText, font: { size: 11 } },
+              ticks: { color: mutedText, font: { size: 11 }, maxRotation: 90, minRotation: 0, autoSkip: false },
               border: { color: cardBorder }
             },
             y: {
               beginAtZero: true,
+              title: { display: true, text: 'Summaries', color: mutedText, font: { size: 11 } },
               grid: { color: cardBorder + '88' },
               ticks: { color: mutedText, font: { size: 11 }, stepSize: 1, precision: 0 },
               border: { color: 'transparent' }
@@ -189,6 +292,23 @@
             if (chartInstance) { chartInstance.destroy(); }
             chartInstance = buildChart();
           }, 50);
+        });
+      }
+
+      // Activity log filter (search by doctor or patient)
+      var filter = document.getElementById('logFilter');
+      var rows = Array.prototype.slice.call(document.querySelectorAll('.log-row'));
+      var noMatch = document.getElementById('logNoMatch');
+      if (filter) {
+        filter.addEventListener('input', function () {
+          var q = this.value.trim().toLowerCase();
+          var visible = 0;
+          rows.forEach(function (r) {
+            var match = !q || r.getAttribute('data-search').indexOf(q) !== -1;
+            r.style.display = match ? '' : 'none';
+            if (match) visible++;
+          });
+          if (noMatch) noMatch.style.display = (visible === 0) ? '' : 'none';
         });
       }
     });

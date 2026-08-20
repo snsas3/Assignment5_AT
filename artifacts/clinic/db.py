@@ -1,9 +1,7 @@
 """
 db.py — Database layer for Meridian Family Health
 ─────────────────────────────────────────────────
-All Supabase reads/writes live here, kept separate from app.py so the
-web layer never talks to the database directly. app.py calls these
-functions; this file is the only place that knows about Supabase.
+All Supabase reads/writes live here, kept separate from app.py.
 
 Requires two Replit Secrets:
   SUPABASE_URL  — your project URL   (https://xxxx.supabase.co)
@@ -11,10 +9,8 @@ Requires two Replit Secrets:
 """
 
 import os
-from datetime import datetime
 from supabase import create_client, Client
 
-# ─── Connect once at import ───────────────────────────────────────
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
 
@@ -22,7 +18,6 @@ _supabase: Client | None = None
 
 
 def get_client() -> Client | None:
-    """Return a cached Supabase client, or None if not configured."""
     global _supabase
     if _supabase is not None:
         return _supabase
@@ -37,8 +32,8 @@ def get_client() -> Client | None:
 #  READ FUNCTIONS
 # ══════════════════════════════════════════════════════════════════
 
+
 def get_all_patients():
-    """Return a list of all patients (basic fields) for the search page."""
     sb = get_client()
     if not sb:
         return []
@@ -51,7 +46,6 @@ def get_all_patients():
 
 
 def get_doctor(doctor_id):
-    """Return a single doctor row, or None."""
     sb = get_client()
     if not sb or not doctor_id:
         return None
@@ -64,11 +58,7 @@ def get_doctor(doctor_id):
 
 
 def get_last_vitals(patient_id, limit_per_type=3):
-    """
-    Return vitals grouped by type, each with its most recent `limit_per_type`
-    readings (newest first). Shape:
-      { "Blood Pressure": [ {reading, unit, recorded_at}, ... ], ... }
-    """
+    """Grouped by type — kept for the AI summary's vitals string."""
     sb = get_client()
     if not sb:
         return {}
@@ -86,19 +76,66 @@ def get_last_vitals(patient_id, limit_per_type=3):
             vt = row["vital_type"]
             grouped.setdefault(vt, [])
             if len(grouped[vt]) < limit_per_type:
-                grouped[vt].append({
-                    "reading": row["reading"],
-                    "unit": row.get("unit", ""),
-                    "recorded_at": row["recorded_at"],
-                })
+                grouped[vt].append(
+                    {
+                        "reading": row["reading"],
+                        "unit": row.get("unit", ""),
+                        "recorded_at": row["recorded_at"],
+                    }
+                )
         return grouped
     except Exception as e:
         print(f"get_last_vitals error: {e}")
         return {}
 
 
+def build_vitals_table(patient_id, max_dates=5):
+    """
+    Reshape vitals into a table:
+      { "columns": ["Heart Rate", "Blood Pressure", ...],
+        "rows": [ { "date": "2026-07-20", "values": {"Heart Rate": "72 bpm", ...} }, ... ] }
+    Rows are newest date first. Missing readings simply aren't in `values`
+    (the template renders a dash).
+    """
+    sb = get_client()
+    if not sb:
+        return {"columns": [], "rows": []}
+    try:
+        resp = (
+            sb.table("vitals")
+            .select("*")
+            .eq("patient_id", patient_id)
+            .order("recorded_at", desc=True)
+            .execute()
+        )
+        rows = resp.data or []
+
+        # Preserve column order by first appearance
+        columns = []
+        by_date = {}
+        for r in rows:
+            vt = r["vital_type"]
+            if vt not in columns:
+                columns.append(vt)
+            date = r["recorded_at"]
+            by_date.setdefault(date, {})
+            # keep the first (newest) reading seen per (date, type)
+            if vt not in by_date[date]:
+                val = r["reading"]
+                unit = r.get("unit", "")
+                by_date[date][vt] = f"{val} {unit}".strip()
+
+        # Sort dates newest first, cap to max_dates
+        sorted_dates = sorted(by_date.keys(), reverse=True)[:max_dates]
+        table_rows = [{"date": d, "values": by_date[d]} for d in sorted_dates]
+
+        return {"columns": columns, "rows": table_rows}
+    except Exception as e:
+        print(f"build_vitals_table error: {e}")
+        return {"columns": [], "rows": []}
+
+
 def get_clinical_notes(patient_id, limit=5):
-    """Return the most recent clinical notes for a patient (newest first)."""
     sb = get_client()
     if not sb:
         return []
@@ -118,11 +155,6 @@ def get_clinical_notes(patient_id, limit=5):
 
 
 def get_patient_full(patient_id):
-    """
-    Assemble a complete patient object for the detail page:
-    patient fields + assigned doctor + last-3 vitals + recent clinical notes.
-    Returns None if the patient doesn't exist.
-    """
     sb = get_client()
     if not sb:
         return None
@@ -131,16 +163,12 @@ def get_patient_full(patient_id):
         if not resp.data:
             return None
         patient = resp.data[0]
-
-        # conditions / medications are stored as jsonb → already lists
         patient["conditions"] = patient.get("conditions") or []
         patient["medications"] = patient.get("medications") or []
-
-        # Attach related data
         patient["doctor"] = get_doctor(patient.get("assigned_doctor_id"))
-        patient["vitals_grouped"] = get_last_vitals(patient_id, 3)
+        patient["vitals_grouped"] = get_last_vitals(patient_id, 3)  # for AI summary
+        patient["vitals_table"] = build_vitals_table(patient_id, 5)  # for the UI table
         patient["notes"] = get_clinical_notes(patient_id, 5)
-
         return patient
     except Exception as e:
         print(f"get_patient_full error: {e}")
@@ -148,39 +176,152 @@ def get_patient_full(patient_id):
 
 
 # ══════════════════════════════════════════════════════════════════
-#  WRITE FUNCTIONS
+#  WRITE
 # ══════════════════════════════════════════════════════════════════
 
-def save_handoff_note(patient_id, note_content, ai_summary,
-                      priority_level, risk_keywords, doctor_username):
-    """Insert one handoff note. Returns the inserted row, or None on failure."""
+
+def save_handoff_note(
+    patient_id, note_content, ai_summary, priority_level, risk_keywords, doctor_username
+):
     sb = get_client()
     if not sb:
         return None
     try:
-        resp = sb.table("handoff_notes").insert({
-            "patient_id": patient_id,
-            "note_content": note_content,
-            "ai_summary": ai_summary,
-            "priority_level": priority_level,
-            "risk_keywords": risk_keywords,
-            "doctor_username": doctor_username,
-        }).execute()
+        resp = (
+            sb.table("handoff_notes")
+            .insert(
+                {
+                    "patient_id": patient_id,
+                    "note_content": note_content,
+                    "ai_summary": ai_summary,
+                    "priority_level": priority_level,
+                    "risk_keywords": risk_keywords,
+                    "doctor_username": doctor_username,
+                }
+            )
+            .execute()
+        )
         return resp.data[0] if resp.data else None
     except Exception as e:
         print(f"save_handoff_note error: {e}")
         return None
 
 
+def save_priority_override(
+    patient_id, system_priority, override_priority, reason, doctor_username
+):
+    """Record a clinician's priority override + reason (feedback capture)."""
+    sb = get_client()
+    if not sb:
+        return None
+    try:
+        resp = (
+            sb.table("priority_overrides")
+            .insert(
+                {
+                    "patient_id": patient_id,
+                    "system_priority": system_priority,
+                    "override_priority": override_priority,
+                    "reason": reason,
+                    "doctor_username": doctor_username,
+                }
+            )
+            .execute()
+        )
+        return resp.data[0] if resp.data else None
+    except Exception as e:
+        print(f"save_priority_override error: {e}")
+        return None
+
+
+def get_latest_override(patient_id):
+    """Return the most recent clinician priority override for a patient, or None."""
+    sb = get_client()
+    if not sb:
+        return None
+    try:
+        resp = (
+            sb.table("priority_overrides")
+            .select("*")
+            .eq("patient_id", patient_id)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        return resp.data[0] if resp.data else None
+    except Exception as e:
+        print(f"get_latest_override error: {e}")
+        return None
+
+
+def get_notes_text_by_patient():
+    """One query -> {patient_id: 'all note text concatenated'}.
+
+    Used to compute each patient's priority for the search list without
+    firing a separate query per patient.
+    """
+    sb = get_client()
+    if not sb:
+        return {}
+    try:
+        resp = sb.table("clinical_notes").select("patient_id, content").execute()
+        grouped = {}
+        for r in resp.data or []:
+            pid = r.get("patient_id")
+            grouped.setdefault(pid, []).append(r.get("content", "") or "")
+        return {pid: " ".join(texts) for pid, texts in grouped.items()}
+    except Exception as e:
+        print(f"get_notes_text_by_patient error: {e}")
+        return {}
+
+
+def get_latest_handoff(patient_id):
+    """Return the most recent saved handoff note for a patient (or None).
+
+    Used to show the Clinical Summary the instant the page loads, without
+    calling the AI again — the summary was already generated and stored
+    when the note was submitted.
+    """
+    sb = get_client()
+    if not sb:
+        return None
+    try:
+        resp = (
+            sb.table("handoff_notes")
+            .select("*")
+            .eq("patient_id", patient_id)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        return resp.data[0] if resp.data else None
+    except Exception as e:
+        print(f"get_latest_handoff error: {e}")
+        return None
+
+
 # ══════════════════════════════════════════════════════════════════
-#  ADMIN STATS  (real numbers, computed from handoff_notes)
+#  ADMIN STATS
 # ══════════════════════════════════════════════════════════════════
 
+
+def _display_name(username):
+    """Turn a login username into a presentable name for the dashboard."""
+    mapping = {
+        "dr.sharma": "Dr. Sharma",
+        "dr.mehta": "Dr. Mehta",
+        "admin": "Admin",
+    }
+    if not username:
+        return "—"
+    if username in mapping:
+        return mapping[username]
+    # Fallback: 'dr.foo' -> 'Dr. Foo', otherwise Title Case
+    parts = username.replace(".", " ").split()
+    return " ".join(p.capitalize() for p in parts)
+
+
 def get_admin_stats():
-    """
-    Compute live dashboard stats from the handoff_notes table plus
-    a patient-name lookup for the activity log.
-    """
     sb = get_client()
     empty = {
         "total_patients_viewed": 0,
@@ -192,7 +333,6 @@ def get_admin_stats():
     }
     if not sb:
         return empty
-
     try:
         notes_resp = (
             sb.table("handoff_notes")
@@ -201,8 +341,6 @@ def get_admin_stats():
             .execute()
         )
         notes = notes_resp.data or []
-
-        # Patient id → name lookup
         pats = get_all_patients()
         name_by_id = {p["id"]: p["name"] for p in pats}
 
@@ -210,37 +348,62 @@ def get_admin_stats():
         failed = sum(1 for n in notes if not n.get("ai_summary"))
         generated = total - failed
 
-        # Activity log (most recent 12)
         activity = []
         for n in notes[:12]:
             created = n.get("created_at", "")
-            # Trim ISO timestamp to "YYYY-MM-DD HH:MM"
             ts = created.replace("T", "  ")[:16] if created else ""
-            activity.append({
-                "timestamp": ts,
-                "doctor": n.get("doctor_username", "—"),
-                "patient": name_by_id.get(n.get("patient_id"), n.get("patient_id", "—")),
-                "action": "Generated Summary" if n.get("ai_summary") else "Summary Failed",
-                "priority": n.get("priority_level", ""),
-            })
+            activity.append(
+                {
+                    "timestamp": ts,
+                    "doctor": _display_name(n.get("doctor_username", "")),
+                    "patient": name_by_id.get(
+                        n.get("patient_id"), n.get("patient_id", "—")
+                    ),
+                    "action": "Generated Summary"
+                    if n.get("ai_summary")
+                    else "Summary Failed",
+                    "priority": n.get("priority_level", ""),
+                }
+            )
 
-        # Daily counts (last 7 distinct days present in data)
         daily = {}
         for n in notes:
             created = n.get("created_at", "")
             day = created[:10] if created else "unknown"
             daily[day] = daily.get(day, 0) + 1
         daily_sorted = sorted(daily.items())[-7:]
-        daily_summaries = [{"date": d[5:], "count": c} for d, c in daily_sorted]
+        _months = [
+            "",
+            "Jan",
+            "Feb",
+            "Mar",
+            "Apr",
+            "May",
+            "Jun",
+            "Jul",
+            "Aug",
+            "Sep",
+            "Oct",
+            "Nov",
+            "Dec",
+        ]
 
-        # Priority breakdown
+        def _fmt_day(d):  # d like "2026-08-19" -> "Aug 19"
+            try:
+                p = d.split("-")
+                return f"{_months[int(p[1])]} {int(p[2])}"
+            except Exception:
+                return d[5:]
+
+        daily_summaries = [{"date": _fmt_day(d), "count": c} for d, c in daily_sorted]
+
         pb = {}
         for n in notes:
             lvl = n.get("priority_level", "UNKNOWN") or "UNKNOWN"
             pb[lvl] = pb.get(lvl, 0) + 1
 
         return {
-            "total_patients_viewed": total,          # proxy: every note = a viewed patient
+            "total_patients_viewed": total,
             "total_summaries_generated": generated,
             "total_failed_generations": failed,
             "activity_log": activity,

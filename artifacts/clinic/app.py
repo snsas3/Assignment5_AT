@@ -1,9 +1,9 @@
 import os
 import sys
 import logging
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from functools import wraps
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 
 import db  # database access layer (db.py)
 import requests  # for Gemini call
@@ -94,15 +94,9 @@ RISK_KEYWORDS = {
         "bleeding",
         "fall",
         "fracture",
-        "infection",
+        "acute infection",
         "elevated bp",
         "hypertensive",
-        "hyperglycemia",
-        "hypoglycemia",
-        "non-compliant",
-        "non-adherent",
-        "medication adherence",
-        "inconsistent medication",
         "chest tightness",
         "dizziness",
         "fainting",
@@ -110,7 +104,6 @@ RISK_KEYWORDS = {
         "exacerbation",
         "prednisone",
         "urgent",
-        "missed doses",
     ],
     "medium": [
         "pain",
@@ -130,6 +123,14 @@ RISK_KEYWORDS = {
         "labs ordered",
         "breathlessness",
         "migraine",
+        "infection",
+        "hyperglycemia",
+        "hypoglycemia",
+        "missed doses",
+        "medication adherence",
+        "non-compliant",
+        "non-adherent",
+        "inconsistent medication",
     ],
 }
 
@@ -200,7 +201,13 @@ def suggest_actions(risk_keywords, priority, patient):
             "Verify all current medications and allergies",
         ]
     elif priority["level"] == "HIGH":
-        actions.append("Schedule priority follow-up within 48 hours")
+        if any(
+            kw in ["asthma flare", "exacerbation", "shortness of breath"]
+            for kw in risk_keywords["high"]
+        ):
+            actions.append("Monitor respiratory status closely")
+        actions.append("Review and reconcile current medications")
+    elif priority["level"] in ["MEDIUM", "MEDIUM-HIGH"]:
         if any(
             kw
             in [
@@ -210,17 +217,13 @@ def suggest_actions(risk_keywords, priority, patient):
                 "medication adherence",
                 "missed doses",
             ]
-            for kw in risk_keywords["high"]
+            for kw in risk_keywords["medium"]
         ):
             actions.append("Medication adherence counseling recommended")
         if any(
-            kw in ["asthma flare", "exacerbation", "shortness of breath"]
-            for kw in risk_keywords["high"]
+            kw in ["hyperglycemia", "hypoglycemia"] for kw in risk_keywords["medium"]
         ):
-            actions.append("Monitor respiratory status closely")
-        actions.append("Review and reconcile current medications")
-    elif priority["level"] in ["MEDIUM", "MEDIUM-HIGH"]:
-        actions.append("Schedule follow-up within 1-2 weeks")
+            actions.append("Monitor blood glucose per care plan")
         if any(kw in ["labs ordered", "recheck"] for kw in risk_keywords["medium"]):
             actions.append("Ensure pending lab results are reviewed")
         if "referral" in risk_keywords["medium"]:
@@ -228,7 +231,6 @@ def suggest_actions(risk_keywords, priority, patient):
     else:
         actions += [
             "Continue current care plan",
-            "Schedule routine follow-up per care guidelines",
         ]
     if age >= 65:
         actions.append("Review fall risk assessment")
@@ -385,6 +387,133 @@ def parse_summary_sections(raw_summary):
 
 
 # ══════════════════════════════════════════════════════════════════
+#  SUMMARY-ON-LOAD  (show the summary the moment the page opens)
+# ══════════════════════════════════════════════════════════════════
+
+
+IST = timezone(timedelta(hours=5, minutes=30))  # India Standard Time (no DST)
+
+PRIORITY_COLORS = {
+    "CRITICAL": "#dc2626",
+    "HIGH": "#ea580c",
+    "MEDIUM-HIGH": "#d97706",
+    "MEDIUM": "#ca8a04",
+    "LOW": "#16a34a",
+}
+PRIORITY_LEVELS = ["CRITICAL", "HIGH", "MEDIUM-HIGH", "MEDIUM", "LOW"]
+
+
+def _is_doctor(username):
+    """Doctors (not admins) are the clinical power users who may override priority."""
+    return bool(username) and username in DEMO_USERS and username not in ADMIN_USERS
+
+
+def _fmt_ts(iso_str):
+    """Format a stored ISO timestamp into a friendly IST string. Never raises.
+
+    Supabase stores timestamps in UTC; we display them in IST for the clinic.
+    """
+    if not iso_str:
+        return ""
+    try:
+        s = iso_str.replace("Z", "+00:00")
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)  # stored value is UTC
+        return dt.astimezone(IST).strftime("%B %d, %Y at %I:%M %p IST")
+    except Exception:
+        return iso_str[:16].replace("T", " ")
+
+
+def _normalize_risk(rk):
+    """Guarantee the {critical, high, medium} shape the logic layer expects."""
+    if not isinstance(rk, dict):
+        rk = {}
+    return {
+        "critical": rk.get("critical", []) or [],
+        "high": rk.get("high", []) or [],
+        "medium": rk.get("medium", []) or [],
+    }
+
+
+def build_summary_on_load(patient):
+    """
+    Populate the Clinical Summary as soon as a clinician opens the page.
+
+    Two cases, both faithful to the system prompt ("only use information
+    explicitly provided; never infer, assume, or invent"):
+
+      1. A handoff note was already submitted -> reuse its STORED summary.
+         Instant, no API call, and the note is echoed above the sections.
+
+      2. No handoff note yet -> generate a summary from the EXISTING RECORD
+         (past clinical notes, vitals, medications). We do NOT fabricate a
+         handoff note; the note slot is passed a factual absence marker,
+         which the model reads as data. This is summarizing verified record
+         data, not inventing anything. Load-time summaries are NOT persisted,
+         so the admin dashboard still counts only real submitted notes.
+
+    Returns a summary dict, or None only if there is genuinely no record at
+    all to summarize.
+    """
+    patient_id = patient["id"]
+    latest = db.get_latest_handoff(patient_id)
+
+    # ── Case 1: reuse the stored summary (fast, free) ──
+    if latest and latest.get("ai_summary"):
+        risk_keywords = _normalize_risk(latest.get("risk_keywords"))
+        priority = assign_priority(risk_keywords, patient)
+        actions = suggest_actions(risk_keywords, priority, patient)
+        return {
+            "generated": True,
+            "error": None,
+            "sections": parse_summary_sections(latest["ai_summary"]),
+            "raw": latest["ai_summary"],
+            "risk_keywords": risk_keywords,
+            "priority": priority,
+            "actions": actions,
+            "handoff_note": latest.get("note_content", ""),
+            "generated_at": _fmt_ts(latest.get("created_at", "")),
+            "generated_by": latest.get("doctor_username", ""),
+        }
+
+    # ── Case 2: no note yet -> summarize the existing record ──
+    has_record = bool(
+        (patient.get("notes") or [])
+        or (patient.get("conditions") or [])
+        or (patient.get("medications") or [])
+        or (patient.get("vitals_grouped") or {})
+    )
+    if not has_record:
+        return None  # nothing on file at all -> show the empty state
+
+    # Factual statement of absence — data for the model, NOT an instruction.
+    absent_note = "No handoff note has been recorded for this shift."
+    past_text = " ".join(
+        n.get("content", "") for n in (patient.get("notes") or [])
+    )
+    risk_keywords = detect_risk_keywords(past_text)
+    priority = assign_priority(risk_keywords, patient)
+    actions = suggest_actions(risk_keywords, priority, patient)
+
+    ai_summary_raw, ai_error = generate_ai_summary(patient, absent_note)
+    sections = parse_summary_sections(ai_summary_raw) if ai_summary_raw else None
+
+    return {
+        "generated": ai_summary_raw is not None,
+        "error": ai_error,
+        "sections": sections,
+        "raw": ai_summary_raw,
+        "risk_keywords": risk_keywords,
+        "priority": priority,
+        "actions": actions,
+        "handoff_note": "",  # no real note to echo on first load
+        "generated_at": datetime.now(IST).strftime("%B %d, %Y at %I:%M %p IST"),
+        "generated_by": session.get("username", ""),
+    }
+
+
+# ══════════════════════════════════════════════════════════════════
 #  ROUTES
 # ══════════════════════════════════════════════════════════════════
 
@@ -406,9 +535,11 @@ def login():
         password = request.form.get("password", "")
         if DEMO_USERS.get(username) == password:
             session["username"] = username
+            # Admins land on the dashboard, not the patient search screen.
+            if username in ADMIN_USERS and (not next_url or next_url == "/"):
+                return redirect(url_for("admin"))
             return redirect(next_url)
-        valid_users = ", ".join(sorted(DEMO_USERS.keys()))
-        error = f"Invalid username or password. Valid usernames: {valid_users}"
+        error = "Invalid credentials."
     return render_template("login.html", error=error, next_url=next_url)
 
 
@@ -422,6 +553,16 @@ def logout():
 @login_required
 def index():
     patients = db.get_all_patients()
+    notes_by_pt = db.get_notes_text_by_patient()
+    rank = {"CRITICAL": 5, "HIGH": 4, "MEDIUM-HIGH": 3, "MEDIUM": 2, "LOW": 1}
+    for p in patients:
+        rk = detect_risk_keywords(notes_by_pt.get(p["id"], ""))
+        prio = assign_priority(rk, p)
+        p["priority"] = prio["level"]
+        p["priority_color"] = prio["color"]
+        p["priority_rank"] = rank.get(prio["level"], 0)
+    # Default sort: highest priority first
+    patients.sort(key=lambda x: x.get("priority_rank", 0), reverse=True)
     return render_template(
         "search.html", patients=patients, username=session.get("username")
     )
@@ -434,11 +575,23 @@ def patient_detail(patient_id):
     if not patient:
         return redirect(url_for("index"))
     patients = db.get_all_patients()
+    summary = build_summary_on_load(patient)  # summary is ready on arrival
+    username = session.get("username")
+    override = db.get_latest_override(patient_id)
+    if override:
+        override["color"] = PRIORITY_COLORS.get(
+            override.get("override_priority"), "#6e6e6e"
+        )
+        override["at"] = _fmt_ts(override.get("created_at", ""))
     return render_template(
         "patient.html",
         patient=patient,
         patients=patients,
-        username=session.get("username"),
+        username=username,
+        summary=summary,
+        override=override,
+        is_doctor=_is_doctor(username),
+        priority_levels=PRIORITY_LEVELS,
     )
 
 
@@ -447,6 +600,105 @@ def patient_detail(patient_id):
 def admin():
     stats = db.get_admin_stats()
     return render_template("admin.html", stats=stats, username=session.get("username"))
+
+
+@app.route("/api/generate", methods=["POST"])
+@login_required
+def api_generate():
+    """JSON processing API — runs the same pipeline as /submit-note but returns
+    a structured JSON response instead of a rendered page. This demonstrates the
+    frontend/backend contract (input -> processing -> structured output).
+    It is stateless (does not persist); use /submit-note for the stored flow.
+    """
+    data = request.get_json(silent=True) or request.form
+    patient_id = (data.get("patient_id") or "").strip()
+    note_content = (data.get("note_content") or "").strip()
+
+    patient = db.get_patient_full(patient_id)
+    if not patient:
+        return jsonify({"error": "Unknown patient_id"}), 404
+
+    # Input validation (same guardrails as the rendered flow)
+    if len(note_content) < MIN_NOTE_LEN:
+        return jsonify({"error": "Handoff note is too short to summarize."}), 400
+    if len(note_content) > MAX_NOTE_LEN:
+        return jsonify(
+            {"error": f"Handoff note is too long (max {MAX_NOTE_LEN} characters)."}
+        ), 400
+
+    # Combine text for risk analysis
+    all_notes_text = note_content
+    for note in patient.get("notes", []) or []:
+        all_notes_text += " " + note.get("content", "")
+
+    # Smart logic layer (deterministic)
+    risk_keywords = detect_risk_keywords(all_notes_text)
+    priority = assign_priority(risk_keywords, patient)
+    actions = suggest_actions(risk_keywords, priority, patient)
+
+    # AI summary (secure call)
+    ai_summary_raw, ai_error = generate_ai_summary(patient, note_content)
+    sections = parse_summary_sections(ai_summary_raw) if ai_summary_raw else {}
+
+    print(
+        f"[api/generate] patient={patient_id} priority={priority['level']} "
+        f"generated={ai_summary_raw is not None}"
+    )
+
+    return jsonify(
+        {
+            "summary": ai_summary_raw or "",
+            "items": [
+                {"section": k, "text": v} for k, v in (sections or {}).items()
+            ],
+            "insights": actions,
+            "metadata": {
+                "priority": priority["level"],
+                "risk": risk_keywords,
+                "generated": ai_summary_raw is not None,
+                "error": ai_error,
+            },
+        }
+    )
+
+
+@app.route("/override-priority", methods=["POST"])
+@login_required
+def override_priority():
+    """Doctors (not admins) can override the system priority and record why.
+    Captured as human-in-the-loop feedback: system suggestion + clinician
+    correction + rationale. Does not retrain anything live; it builds the
+    labeled dataset that would drive future rule/model improvement.
+    """
+    username = session.get("username", "")
+    patient_id = request.form.get("patient_id", "")
+
+    # Only clinicians may override — admins are monitoring, not treating.
+    if not _is_doctor(username):
+        return redirect(url_for("patient_detail", patient_id=patient_id))
+
+    new_level = request.form.get("override_priority", "").strip().upper()
+    reason = request.form.get("reason", "").strip()
+    patient = db.get_patient_full(patient_id)
+
+    if not patient or new_level not in PRIORITY_COLORS or len(reason) < 3:
+        return redirect(url_for("patient_detail", patient_id=patient_id))
+
+    # Record what the system had suggested, for the feedback trail.
+    past_text = " ".join(
+        n.get("content", "") for n in (patient.get("notes") or [])
+    )
+    system_level = assign_priority(detect_risk_keywords(past_text), patient)["level"]
+
+    db.save_priority_override(
+        patient_id=patient_id,
+        system_priority=system_level,
+        override_priority=new_level,
+        reason=reason,
+        doctor_username=username,
+    )
+    print(f"[override] {username} set {patient_id} -> {new_level} (system={system_level})")
+    return redirect(url_for("patient_detail", patient_id=patient_id))
 
 
 @app.route("/submit-note", methods=["POST"])
