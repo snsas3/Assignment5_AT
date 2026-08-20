@@ -1,0 +1,1 @@
+- [Managed Flask workflow reloader](workflow-reloader.md) — artifact services should rely on managed restarts, not Flask's child-process reloader.

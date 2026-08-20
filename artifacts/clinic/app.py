@@ -793,4 +793,6 @@ def submit_note():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5001))
-    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=True)
+    # The artifact workflow owns process restarts. Flask's child-process
+    # reloader can race with managed restarts and leave the preview offline.
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
