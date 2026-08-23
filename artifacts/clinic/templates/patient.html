@@ -914,6 +914,7 @@ Health{% endblock %} {% block nav_search %}
   <!-- ══ NOTE CARD ══ -->
   <div class="notebar">
     <form method="POST" action="/submit-note">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
       <input type="hidden" name="patient_id" value="{{ patient.id }}" />
       <div class="lbl">Add handoff note</div>
       <div class="ta-wrap">
@@ -1075,6 +1076,7 @@ Health{% endblock %} {% block nav_search %}
       here. A reason is required and is recorded as clinician feedback.
     </p>
     <form method="POST" action="/override-priority" class="pm-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
       <input type="hidden" name="patient_id" value="{{ patient.id }}" />
       <label class="pm-label">
         New priority
@@ -1145,9 +1147,9 @@ Health{% endblock %} {% block nav_search %}
     }
   })();
 
-  var ALL_PATIENTS = [
-    {% for p in patients %}{ id: "{{ p.id }}", name: "{{ p.name }}", age: {{ p.age }}, gender: "{{ p.gender }}" }{% if not loop.last %},{% endif %}{% endfor %}
-  ];
+  // Rendered as JSON so a patient name containing quotes or angle brackets
+  // cannot break out of this script tag and execute as code.
+  var ALL_PATIENTS = {{ (patients_min or []) | tojson }};
   document.addEventListener('DOMContentLoaded', function () {
     var navInput = document.getElementById('navSearchInput');
     var wrap = document.getElementById('navSearchWrap');
@@ -1160,9 +1162,21 @@ Health{% endblock %} {% block nav_search %}
       if (!q) { dropdown.classList.remove('open'); return; }
       var matches = ALL_PATIENTS.filter(function (p) { return p.name.toLowerCase().includes(q); });
       if (!matches.length) { dropdown.classList.remove('open'); return; }
-      dropdown.innerHTML = matches.map(function (p) {
-        return '<a class="nav-drop-item" href="/patient/' + p.id + '"><strong>' + p.name + '</strong><span>' + p.gender + ', ' + p.age + ' yrs</span></a>';
-      }).join('');
+      // Built with textContent rather than innerHTML: patient names are treated
+      // strictly as text and can never be interpreted as HTML.
+      dropdown.textContent = '';
+      matches.forEach(function (p) {
+        var a = document.createElement('a');
+        a.className = 'nav-drop-item';
+        a.href = '/patient/' + encodeURIComponent(p.id);
+        var strong = document.createElement('strong');
+        strong.textContent = p.name;
+        var span = document.createElement('span');
+        span.textContent = p.gender + ', ' + p.age + ' yrs';
+        a.appendChild(strong);
+        a.appendChild(span);
+        dropdown.appendChild(a);
+      });
       dropdown.classList.add('open');
     });
     navInput.addEventListener('keydown', function (e) {

@@ -1,6 +1,8 @@
 import os
 import sys
+import time
 import logging
+import secrets
 from datetime import datetime, timezone, timedelta
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
@@ -37,12 +39,85 @@ app.config.update(
     SESSION_COOKIE_SECURE=os.environ.get("FLASK_ENV") == "production",
 )
 
+# ── Demo credentials ──────────────────────────────────────────────
+# Passwords are read from environment variables so they are NOT committed
+# to a public repository. The fallbacks keep the demo runnable out of the
+# box; set the env vars in Replit Secrets to use private values.
 DEMO_USERS = {
-    "dr.sharma": "clinic2026",
-    "dr.mehta": "clinic2026",
-    "admin": "admin2026",
+    "dr.sharma": os.environ.get("DEMO_PW_SHARMA", "clinic2026"),
+    "dr.mehta": os.environ.get("DEMO_PW_MEHTA", "clinic2026"),
+    "admin": os.environ.get("DEMO_PW_ADMIN", "admin2026"),
 }
 ADMIN_USERS = {"admin"}
+
+# ── Login throttling (brute-force guard) ──────────────────────────
+# In-memory and per-process: resets on restart. Adequate for a single
+# prototype instance; production would use Redis or the database.
+MAX_LOGIN_ATTEMPTS = 8
+LOGIN_LOCKOUT_SECONDS = 300
+_login_attempts = {}
+
+
+def _client_ip():
+    fwd = request.headers.get("X-Forwarded-For", "")
+    return (fwd.split(",")[0].strip() if fwd else request.remote_addr) or "unknown"
+
+
+def _is_locked_out(ip):
+    rec = _login_attempts.get(ip)
+    if not rec:
+        return False
+    count, first_at = rec
+    if time.time() - first_at > LOGIN_LOCKOUT_SECONDS:
+        _login_attempts.pop(ip, None)
+        return False
+    return count >= MAX_LOGIN_ATTEMPTS
+
+
+def _record_failed_login(ip):
+    count, first_at = _login_attempts.get(ip, (0, time.time()))
+    if time.time() - first_at > LOGIN_LOCKOUT_SECONDS:
+        count, first_at = 0, time.time()
+    _login_attempts[ip] = (count + 1, first_at)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  CSRF PROTECTION
+# ══════════════════════════════════════════════════════════════════
+# A CSRF attack tricks a logged-in user's browser into submitting a form
+# to this app from a malicious page. We defend by putting a secret token
+# in every form and rejecting any POST whose token does not match the
+# one stored in the user's session.
+
+CSRF_EXEMPT_PATHS = {"/api/generate"}  # documented programmatic API
+
+
+def _csrf_token():
+    tok = session.get("_csrf")
+    if not tok:
+        tok = secrets.token_urlsafe(32)
+        session["_csrf"] = tok
+    return tok
+
+
+@app.context_processor
+def _inject_csrf():
+    """Makes {{ csrf_token() }} available inside every template."""
+    return {"csrf_token": _csrf_token}
+
+
+@app.before_request
+def _csrf_protect():
+    if request.method != "POST":
+        return None
+    if request.path in CSRF_EXEMPT_PATHS:
+        return None
+    sent = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token", "")
+    expected = session.get("_csrf", "")
+    if not expected or not sent or not secrets.compare_digest(sent, expected):
+        log.warning("CSRF token mismatch on %s", request.path)
+        return render_template("403.html"), 403
+    return None
 
 
 def login_required(f):
@@ -425,6 +500,26 @@ def _fmt_ts(iso_str):
         return iso_str[:16].replace("T", " ")
 
 
+def _patients_min(patients):
+    """Trimmed patient list for the navbar type-ahead.
+
+    Passed to the template as JSON rather than hand-built JavaScript, so a
+    name containing a quote or angle bracket can never break out of the
+    script and execute. Only the fields the dropdown needs are included.
+    """
+    out = []
+    for p in patients or []:
+        out.append(
+            {
+                "id": p.get("id", ""),
+                "name": p.get("name", ""),
+                "age": p.get("age", ""),
+                "gender": p.get("gender", ""),
+            }
+        )
+    return out
+
+
 def _normalize_risk(rk):
     """Guarantee the {critical, high, medium} shape the logic layer expects."""
     if not isinstance(rk, dict):
@@ -489,9 +584,7 @@ def build_summary_on_load(patient):
 
     # Factual statement of absence — data for the model, NOT an instruction.
     absent_note = "No handoff note has been recorded for this shift."
-    past_text = " ".join(
-        n.get("content", "") for n in (patient.get("notes") or [])
-    )
+    past_text = " ".join(n.get("content", "") for n in (patient.get("notes") or []))
     risk_keywords = detect_risk_keywords(past_text)
     priority = assign_priority(risk_keywords, patient)
     actions = suggest_actions(risk_keywords, priority, patient)
@@ -528,18 +621,29 @@ def _safe_next(url):
 def login():
     error = None
     next_url = _safe_next(request.args.get("next", "") or request.form.get("next", ""))
+    ip = _client_ip()
     if not DEMO_USERS:
         error = "Server is not configured with login credentials."
     elif request.method == "POST":
-        username = request.form.get("username", "").strip().lower()
-        password = request.form.get("password", "")
-        if DEMO_USERS.get(username) == password:
-            session["username"] = username
-            # Admins land on the dashboard, not the patient search screen.
-            if username in ADMIN_USERS and (not next_url or next_url == "/"):
-                return redirect(url_for("admin"))
-            return redirect(next_url)
-        error = "Invalid credentials."
+        if _is_locked_out(ip):
+            log.warning("Login lockout in effect for %s", ip)
+            error = "Too many failed attempts. Please try again in a few minutes."
+        else:
+            username = request.form.get("username", "").strip().lower()
+            password = request.form.get("password", "")
+            expected = DEMO_USERS.get(username)
+            # compare_digest avoids leaking timing information about the password
+            if expected and secrets.compare_digest(expected, password):
+                _login_attempts.pop(ip, None)
+                # Rotate the session on privilege change (prevents session fixation)
+                session.clear()
+                session["username"] = username
+                if username in ADMIN_USERS and (not next_url or next_url == "/"):
+                    return redirect(url_for("admin"))
+                return redirect(next_url)
+            _record_failed_login(ip)
+            # Same message either way — never reveals whether the user exists
+            error = "Invalid credentials."
     return render_template("login.html", error=error, next_url=next_url)
 
 
@@ -587,6 +691,7 @@ def patient_detail(patient_id):
         "patient.html",
         patient=patient,
         patients=patients,
+        patients_min=_patients_min(patients),
         username=username,
         summary=summary,
         override=override,
@@ -648,9 +753,7 @@ def api_generate():
     return jsonify(
         {
             "summary": ai_summary_raw or "",
-            "items": [
-                {"section": k, "text": v} for k, v in (sections or {}).items()
-            ],
+            "items": [{"section": k, "text": v} for k, v in (sections or {}).items()],
             "insights": actions,
             "metadata": {
                 "priority": priority["level"],
@@ -685,9 +788,7 @@ def override_priority():
         return redirect(url_for("patient_detail", patient_id=patient_id))
 
     # Record what the system had suggested, for the feedback trail.
-    past_text = " ".join(
-        n.get("content", "") for n in (patient.get("notes") or [])
-    )
+    past_text = " ".join(n.get("content", "") for n in (patient.get("notes") or []))
     system_level = assign_priority(detect_risk_keywords(past_text), patient)["level"]
 
     db.save_priority_override(
@@ -697,7 +798,9 @@ def override_priority():
         reason=reason,
         doctor_username=username,
     )
-    print(f"[override] {username} set {patient_id} -> {new_level} (system={system_level})")
+    print(
+        f"[override] {username} set {patient_id} -> {new_level} (system={system_level})"
+    )
     return redirect(url_for("patient_detail", patient_id=patient_id))
 
 
@@ -734,12 +837,25 @@ def submit_note():
             "generated_at": datetime.now().strftime("%B %d, %Y at %I:%M %p"),
             "generated_by": session.get("username", "unknown"),
         }
+        # NOTE: is_doctor / override / priority_levels must be passed here too.
+        # The template hides the priority badge, the "doesn't look right?" link
+        # and the override modal when they are absent, so omitting them made
+        # the override feature silently disappear after a note submission.
+        _uname = session.get("username")
+        _ov = db.get_latest_override(patient_id)
+        if _ov:
+            _ov["color"] = PRIORITY_COLORS.get(_ov.get("override_priority"), "#6e6e6e")
+            _ov["at"] = _fmt_ts(_ov.get("created_at", ""))
         return render_template(
             "patient.html",
             patient=patient,
             patients=patients,
-            username=session.get("username"),
+            patients_min=_patients_min(patients),
+            username=_uname,
             summary=summary_result,
+            override=_ov,
+            is_doctor=_is_doctor(_uname),
+            priority_levels=PRIORITY_LEVELS,
         )
 
     # ── Combine text for risk analysis ──
@@ -782,12 +898,21 @@ def submit_note():
     }
 
     patients = db.get_all_patients()
+    _uname = session.get("username")
+    _ov = db.get_latest_override(patient_id)
+    if _ov:
+        _ov["color"] = PRIORITY_COLORS.get(_ov.get("override_priority"), "#6e6e6e")
+        _ov["at"] = _fmt_ts(_ov.get("created_at", ""))
     return render_template(
         "patient.html",
         patient=patient,
         patients=patients,
-        username=session.get("username"),
+        patients_min=_patients_min(patients),
+        username=_uname,
         summary=summary_result,
+        override=_ov,
+        is_doctor=_is_doctor(_uname),
+        priority_levels=PRIORITY_LEVELS,
     )
 
 
