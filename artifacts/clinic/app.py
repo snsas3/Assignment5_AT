@@ -746,6 +746,11 @@ def logout():
 @app.route("/")
 @login_required
 def index():
+    # Admins have no clinical access: patient search and records are for
+    # licensed clinicians only. An admin landing here is redirected to the
+    # dashboard, which is their home surface.
+    if session.get("username") in ADMIN_USERS:
+        return redirect(url_for("admin"))
     patients = db.get_all_patients()
     notes_by_pt = db.get_notes_text_by_patient()
     rank = {"CRITICAL": 5, "HIGH": 4, "MEDIUM-HIGH": 3, "MEDIUM": 2, "LOW": 1}
@@ -777,7 +782,7 @@ def _back_target():
 
 
 @app.route("/patient/<patient_id>")
-@login_required
+@doctor_required
 def patient_detail(patient_id):
     patient = db.get_patient_full(patient_id)
     if not patient:

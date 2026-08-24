@@ -22,7 +22,7 @@
   .stat-desc { font-size: 0.75rem; color: var(--muted-text); }
 
   /* Bottom grid */
-  .bottom-grid { display: grid; grid-template-columns: 1fr 1.65fr; gap: 1.25rem; align-items: start; }
+  .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; align-items: start; margin-bottom: 1.25rem; }
 
   /* Chart */
   .chart-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 1.25rem 1.5rem; box-shadow: var(--shadow); }
@@ -89,7 +89,7 @@
     color: #fff;
     white-space: nowrap;
   }
-  .log-detail { max-width: 260px; }
+  .log-detail { max-width: 360px; }
   .log-detail-sys { display: block; font-size: 0.72rem; color: var(--muted-text); }
   .log-detail-reason { display: block; font-style: italic; color: var(--fg); margin-top: 2px; }
   .log-patient-link { color: var(--primary); text-decoration: none; font-weight: 500; }
@@ -107,7 +107,7 @@
 
   @media (max-width: 900px) {
     .stats-grid  { grid-template-columns: 1fr 1fr; }
-    .bottom-grid { grid-template-columns: 1fr; }
+    .charts-grid { grid-template-columns: 1fr; }
   }
   @media (max-width: 640px) {
     .admin-page { padding: 1.25rem 1rem 2.5rem; }
@@ -145,9 +145,9 @@
   </div>
 
   <!-- Chart + Log -->
-  <div class="bottom-grid">
+  <div class="charts-grid">
 
-    <div class="chart-card" style="margin-bottom:1.25rem">
+    <div class="chart-card">
       <div class="section-title" style="margin-bottom:0.2rem">Priority Distribution</div>
       <div class="chart-caption">
         Current priority per patient{% if stats.priority_adjusted_count %} &middot;
@@ -184,8 +184,10 @@
       </div>
     </div>
 
-    <div class="activity-card">
-      <div class="activity-hdr">
+  </div><!-- /charts-grid -->
+
+  <div class="activity-card">
+    <div class="activity-hdr">
         <div class="section-title" style="margin-bottom:0">Recent Activity Log</div>
         <input type="search" id="logFilter" class="log-filter" placeholder="Search by doctor or patient..." autocomplete="off" />
       </div>
@@ -206,11 +208,7 @@
             <tr class="log-row" data-search="{{ (row.doctor ~ ' ' ~ row.patient) | lower }}">
               <td class="text-sm text-muted" style="white-space:nowrap">{{ row.timestamp }}</td>
               <td class="text-sm font-semibold">{{ row.doctor }}</td>
-              <td class="text-sm">
-                {% if row.patient_id %}
-                <a href="/patient/{{ row.patient_id }}?from=admin" class="log-patient-link">{{ row.patient }}</a>
-                {% else %}{{ row.patient }}{% endif %}
-              </td>
+              <td class="text-sm">{{ row.patient }}</td>
               <td>
                 {% if row.priority %}
                 <span class="prio-pill prio-{{ row.priority | lower | replace('-', '') }}">{{ row.priority }}</span>
@@ -241,11 +239,9 @@
             {% endfor %}
           </tbody>
         </table>
-        <p id="logNoMatch" class="text-sm text-muted" style="display:none;padding:1rem 0 0.25rem">No records match that filter.</p>
-      </div>
+      <p id="logNoMatch" class="text-sm text-muted" style="display:none;padding:1rem 0 0.25rem">No records match that filter.</p>
     </div>
-
-  </div><!-- /bottom-grid -->
+  </div><!-- /activity-card -->
 </div>
 {% endblock %}
 
