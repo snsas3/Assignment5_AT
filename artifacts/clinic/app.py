@@ -762,6 +762,20 @@ def index():
     )
 
 
+def _back_target():
+    """Where the patient page's back arrow should return to.
+
+    Context-aware: an admin who reached a patient from the dashboard should
+    return to the dashboard, while a doctor who came from search returns to
+    search. We read the ?from= query param (set on the links that point here)
+    and fall back to search for any direct/unknown entry.
+    """
+    origin = request.args.get("from", "")
+    if origin == "admin" and session.get("username") in ADMIN_USERS:
+        return {"url": url_for("admin"), "label": "Back to dashboard"}
+    return {"url": url_for("index"), "label": "Back to search"}
+
+
 @app.route("/patient/<patient_id>")
 @login_required
 def patient_detail(patient_id):
@@ -787,6 +801,7 @@ def patient_detail(patient_id):
         override=override,
         is_doctor=_is_doctor(username),
         priority_levels=PRIORITY_LEVELS,
+        back=_back_target(),
     )
 
 
@@ -996,6 +1011,7 @@ def submit_note():
             override=_ov,
             is_doctor=_is_doctor(_uname),
             priority_levels=PRIORITY_LEVELS,
+            back=_back_target(),
         )
 
     # ── Combine text for risk analysis ──
@@ -1053,6 +1069,7 @@ def submit_note():
         override=_ov,
         is_doctor=_is_doctor(_uname),
         priority_levels=PRIORITY_LEVELS,
+        back=_back_target(),
     )
 
 

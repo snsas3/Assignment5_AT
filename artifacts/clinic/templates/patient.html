@@ -783,10 +783,10 @@ Health{% endblock %} {% block nav_search %}
     <div>
       <div class="pident-name">
         <a
-          href="/"
+          href="{{ back.url if back else '/' }}"
           class="name-back"
-          aria-label="Back to patient search"
-          title="Back to search"
+          aria-label="{{ back.label if back else 'Back to search' }}"
+          title="{{ back.label if back else 'Back to search' }}"
         >
           <svg
             width="22"
@@ -931,7 +931,7 @@ Health{% endblock %} {% block nav_search %}
   <!-- ══ NOTE CARD ══ -->
   {% if is_doctor %}
   <div class="notebar">
-    <form method="POST" action="/submit-note">
+    <form method="POST" action="/submit-note{{ '?from=admin' if back and back.label == 'Back to dashboard' else '' }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
       <input type="hidden" name="patient_id" value="{{ patient.id }}" />
       <div class="lbl">Add handoff note</div>

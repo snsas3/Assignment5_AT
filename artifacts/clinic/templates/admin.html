@@ -89,6 +89,9 @@
     color: #fff;
     white-space: nowrap;
   }
+  .log-detail { max-width: 260px; }
+  .log-detail-sys { display: block; font-size: 0.72rem; color: var(--muted-text); }
+  .log-detail-reason { display: block; font-style: italic; color: var(--fg); margin-top: 2px; }
   .log-patient-link { color: var(--primary); text-decoration: none; font-weight: 500; }
   .log-patient-link:hover { text-decoration: underline; }
   .badge-adjusted {
@@ -195,6 +198,7 @@
               <th>Patient</th>
               <th>Priority</th>
               <th>Action</th>
+              <th>Details</th>
             </tr>
           </thead>
           <tbody id="logBody">
@@ -204,7 +208,7 @@
               <td class="text-sm font-semibold">{{ row.doctor }}</td>
               <td class="text-sm">
                 {% if row.patient_id %}
-                <a href="/patient/{{ row.patient_id }}" class="log-patient-link">{{ row.patient }}</a>
+                <a href="/patient/{{ row.patient_id }}?from=admin" class="log-patient-link">{{ row.patient }}</a>
                 {% else %}{{ row.patient }}{% endif %}
               </td>
               <td>
@@ -223,6 +227,14 @@
                   <span class="badge badge-adjusted" title="{{ row.detail }}">{{ row.action }}</span>
                 {% else %}
                   <span class="badge badge-viewed">{{ row.action }}</span>
+                {% endif %}
+              </td>
+              <td class="text-sm log-detail">
+                {% if row.action == "Priority Adjusted" %}
+                  <span class="log-detail-sys">{{ row.detail }}</span>
+                  {% if row.reason %}<span class="log-detail-reason">&ldquo;{{ row.reason }}&rdquo;</span>{% endif %}
+                {% else %}
+                  <span class="text-muted">&mdash;</span>
                 {% endif %}
               </td>
             </tr>

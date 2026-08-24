@@ -410,6 +410,7 @@ def get_admin_stats():
                     "detail": "System suggested {}".format(
                         o.get("system_priority", "—")
                     ),
+                    "reason": o.get("reason", ""),
                 }
             )
         events.sort(key=lambda e: e.get("created_at", ""), reverse=True)
