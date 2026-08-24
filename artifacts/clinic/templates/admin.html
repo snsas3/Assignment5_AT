@@ -89,6 +89,13 @@
     color: #fff;
     white-space: nowrap;
   }
+  .log-patient-link { color: var(--primary); text-decoration: none; font-weight: 500; }
+  .log-patient-link:hover { text-decoration: underline; }
+  .badge-adjusted {
+    background: rgba(124, 58, 237, 0.12);
+    color: #7c3aed;
+    border: 1px solid rgba(124, 58, 237, 0.25);
+  }
   .prio-critical  { background: #dc2626; }
   .prio-high      { background: #ea580c; }
   .prio-mediumhigh{ background: #d97706; }
@@ -118,9 +125,9 @@
   <!-- Stats -->
   <div class="stats-grid">
     <div class="stat-card">
-      <div class="stat-label">Total Patients Viewed</div>
-      <div class="stat-value">{{ stats.total_patients_viewed }}</div>
-      <div class="stat-desc">Across all sessions</div>
+      <div class="stat-label">Handoff Notes Submitted</div>
+      <div class="stat-value">{{ stats.total_notes_submitted }}</div>
+      <div class="stat-desc">{{ stats.total_overrides }} clinician priority adjustments</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Summaries Generated</div>
@@ -139,7 +146,10 @@
 
     <div class="chart-card" style="margin-bottom:1.25rem">
       <div class="section-title" style="margin-bottom:0.2rem">Priority Distribution</div>
-      <div class="chart-caption">Across all handoffs to date</div>
+      <div class="chart-caption">
+        Current priority per patient{% if stats.priority_adjusted_count %} &middot;
+        {{ stats.priority_adjusted_count }} clinician-adjusted{% endif %}
+      </div>
       {% set order = [
         ("CRITICAL", "#dc2626"),
         ("HIGH", "#ea580c"),
@@ -192,7 +202,11 @@
             <tr class="log-row" data-search="{{ (row.doctor ~ ' ' ~ row.patient) | lower }}">
               <td class="text-sm text-muted" style="white-space:nowrap">{{ row.timestamp }}</td>
               <td class="text-sm font-semibold">{{ row.doctor }}</td>
-              <td class="text-sm">{{ row.patient }}</td>
+              <td class="text-sm">
+                {% if row.patient_id %}
+                <a href="/patient/{{ row.patient_id }}" class="log-patient-link">{{ row.patient }}</a>
+                {% else %}{{ row.patient }}{% endif %}
+              </td>
               <td>
                 {% if row.priority %}
                 <span class="prio-pill prio-{{ row.priority | lower | replace('-', '') }}">{{ row.priority }}</span>
@@ -205,6 +219,8 @@
                   <span class="badge badge-success">{{ row.action }}</span>
                 {% elif row.action == "Summary Failed" %}
                   <span class="badge badge-failed">{{ row.action }}</span>
+                {% elif row.action == "Priority Adjusted" %}
+                  <span class="badge badge-adjusted" title="{{ row.detail }}">{{ row.action }}</span>
                 {% else %}
                   <span class="badge badge-viewed">{{ row.action }}</span>
                 {% endif %}

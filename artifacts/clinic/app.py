@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import time
 import logging
@@ -136,6 +137,93 @@ def admin_required(f):
         if not session.get("username"):
             return redirect(url_for("login", next=request.path))
         if session.get("username") not in ADMIN_USERS:
+            return render_template("403.html"), 403
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+# ══════════════════════════════════════════════════════════════════
+#  INPUT QUALITY GATE  (logic layer — runs BEFORE any AI call)
+# ══════════════════════════════════════════════════════════════════
+
+VOWELS = set("aeiou")
+
+
+def looks_like_clinical_note(text):
+    """Reject keyboard-mash and non-clinical input before it reaches the record.
+
+    A length check alone is not enough: "fhgfhgfhgfjfklklghvm" is long enough
+    to pass, so it was being saved to the permanent clinical record and sent
+    to the model. The AI correctly flagged it as unclear rather than inventing
+    meaning, but by then the note was already stored.
+
+    This gate sits in the deterministic logic layer, before the AI call, so
+    unusable input never enters the record and never costs a token. The checks
+    are intentionally coarse — they screen out mashing, not clinical style.
+
+    Returns (ok, reason).
+    """
+    t = (text or "").strip()
+    words = [w for w in re.split(r"\s+", t) if w]
+
+    if len(words) < 4:
+        return False, (
+            "Handoff note should be written as clinical text — please enter a "
+            "full note rather than a few characters."
+        )
+
+    if any(len(w) > 30 for w in words):
+        return False, (
+            "That doesn't look like a clinical note. Please describe the "
+            "handoff in plain clinical language."
+        )
+
+    alpha_words = [w for w in words if any(c.isalpha() for c in w)]
+    if alpha_words:
+        # Real words almost always contain a vowel; mashed keys often don't.
+        vowelless = sum(
+            1 for w in alpha_words if not any(c in VOWELS for c in w.lower())
+        )
+        if vowelless / len(alpha_words) > 0.5:
+            return False, (
+                "That doesn't look like a clinical note. Please describe the "
+                "handoff in plain clinical language."
+            )
+
+    letters = [c for c in t.lower() if c.isalpha()]
+    if len(letters) >= 12:
+        ratio = sum(1 for c in letters if c in VOWELS) / len(letters)
+        if ratio < 0.12:
+            return False, (
+                "That doesn't look like a clinical note. Please describe the "
+                "handoff in plain clinical language."
+            )
+
+    return True, None
+
+
+def doctor_required(f):
+    """Restrict a route to clinicians.
+
+    Governance stance: admins monitor the system, clinicians treat patients.
+    Writing a clinical note is an act of care that carries the author's name
+    into the permanent record, so it belongs to whoever holds clinical
+    context — not to an operational admin account. This mirrors the same
+    reasoning behind admins not being able to delete notes or override
+    priority.
+    """
+
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("username"):
+            return redirect(url_for("login", next=request.path))
+        if not _is_doctor(session.get("username")):
+            log.warning(
+                "Non-clinician %s attempted %s",
+                session.get("username"),
+                request.path,
+            )
             return render_template("403.html"), 403
         return f(*args, **kwargs)
 
@@ -584,7 +672,9 @@ def build_summary_on_load(patient):
 
     # Factual statement of absence — data for the model, NOT an instruction.
     absent_note = "No handoff note has been recorded for this shift."
-    past_text = " ".join(n.get("content", "") for n in (patient.get("notes") or []))
+    past_text = " ".join(
+        n.get("content", "") for n in (patient.get("notes") or [])
+    )
     risk_keywords = detect_risk_keywords(past_text)
     priority = assign_priority(risk_keywords, patient)
     actions = suggest_actions(risk_keywords, priority, patient)
@@ -704,6 +794,38 @@ def patient_detail(patient_id):
 @admin_required
 def admin():
     stats = db.get_admin_stats()
+
+    # ── Priority distribution: per PATIENT, not per note ──────────────
+    # Counting handoff notes meant a patient whose priority a clinician had
+    # adjusted (but who had no note submitted) never appeared in the chart at
+    # all. Counting current state per patient answers the question an admin
+    # actually asks — "how many patients sit at each priority right now?" —
+    # and lets clinician overrides show up, since an override is recorded
+    # per patient rather than per note.
+    patients = db.get_all_patients()
+    notes_by_pt = db.get_notes_text_by_patient()
+    overrides = db.get_all_overrides()
+
+    latest_override = {}
+    for o in overrides:  # already newest-first, so keep the first seen
+        latest_override.setdefault(o.get("patient_id"), o)
+
+    breakdown = {lvl: 0 for lvl in PRIORITY_LEVELS}
+    adjusted = 0
+    for p in patients:
+        rk = detect_risk_keywords(notes_by_pt.get(p["id"], ""))
+        level = assign_priority(rk, p)["level"]
+        ov = latest_override.get(p["id"])
+        if ov and ov.get("override_priority"):
+            level = ov["override_priority"]
+            adjusted += 1
+        if level in breakdown:
+            breakdown[level] += 1
+
+    stats["priority_breakdown"] = breakdown
+    stats["priority_adjusted_count"] = adjusted
+    stats["priority_total_patients"] = len(patients)
+
     return render_template("admin.html", stats=stats, username=session.get("username"))
 
 
@@ -726,6 +848,9 @@ def api_generate():
     # Input validation (same guardrails as the rendered flow)
     if len(note_content) < MIN_NOTE_LEN:
         return jsonify({"error": "Handoff note is too short to summarize."}), 400
+    readable, quality_error = looks_like_clinical_note(note_content)
+    if not readable:
+        return jsonify({"error": quality_error}), 400
     if len(note_content) > MAX_NOTE_LEN:
         return jsonify(
             {"error": f"Handoff note is too long (max {MAX_NOTE_LEN} characters)."}
@@ -753,7 +878,9 @@ def api_generate():
     return jsonify(
         {
             "summary": ai_summary_raw or "",
-            "items": [{"section": k, "text": v} for k, v in (sections or {}).items()],
+            "items": [
+                {"section": k, "text": v} for k, v in (sections or {}).items()
+            ],
             "insights": actions,
             "metadata": {
                 "priority": priority["level"],
@@ -788,7 +915,9 @@ def override_priority():
         return redirect(url_for("patient_detail", patient_id=patient_id))
 
     # Record what the system had suggested, for the feedback trail.
-    past_text = " ".join(n.get("content", "") for n in (patient.get("notes") or []))
+    past_text = " ".join(
+        n.get("content", "") for n in (patient.get("notes") or [])
+    )
     system_level = assign_priority(detect_risk_keywords(past_text), patient)["level"]
 
     db.save_priority_override(
@@ -798,14 +927,12 @@ def override_priority():
         reason=reason,
         doctor_username=username,
     )
-    print(
-        f"[override] {username} set {patient_id} -> {new_level} (system={system_level})"
-    )
+    print(f"[override] {username} set {patient_id} -> {new_level} (system={system_level})")
     return redirect(url_for("patient_detail", patient_id=patient_id))
 
 
 @app.route("/submit-note", methods=["POST"])
-@login_required
+@doctor_required
 def submit_note():
     patient_id = request.form.get("patient_id", "")
     note_content = request.form.get("note_content", "").strip()
@@ -822,21 +949,34 @@ def submit_note():
         )
     elif len(note_content) > MAX_NOTE_LEN:
         input_error = f"Handoff note is too long (max {MAX_NOTE_LEN} characters). Please shorten it."
+    else:
+        readable, quality_error = looks_like_clinical_note(note_content)
+        if not readable:
+            input_error = quality_error
+            log.info("Rejected low-quality note for patient=%s", patient_id)
 
     if input_error:
         patients = db.get_all_patients()
-        summary_result = {
-            "generated": False,
-            "error": input_error,
-            "sections": None,
-            "raw": None,
-            "risk_keywords": {"critical": [], "high": [], "medium": []},
-            "priority": {"level": "—", "color": "#6e6e6e", "reason": input_error},
-            "actions": [],
-            "handoff_note": note_content,
-            "generated_at": datetime.now().strftime("%B %d, %Y at %I:%M %p"),
-            "generated_by": session.get("username", "unknown"),
-        }
+        # Keep whatever summary the record already had rather than replacing it
+        # with an error card. A rejected input should not destroy the clinical
+        # summary the clinician was reading; the error belongs beside the input.
+        summary_result = build_summary_on_load(patient)
+        if summary_result:
+            summary_result["input_error"] = input_error
+        else:
+            summary_result = {
+                "generated": False,
+                "error": input_error,
+                "input_error": input_error,
+                "sections": None,
+                "raw": None,
+                "risk_keywords": {"critical": [], "high": [], "medium": []},
+                "priority": {"level": "—", "color": "#6e6e6e", "reason": input_error},
+                "actions": [],
+                "handoff_note": "",
+                "generated_at": datetime.now().strftime("%B %d, %Y at %I:%M %p"),
+                "generated_by": session.get("username", "unknown"),
+            }
         # NOTE: is_doctor / override / priority_levels must be passed here too.
         # The template hides the priority badge, the "doesn't look right?" link
         # and the override modal when they are absent, so omitting them made

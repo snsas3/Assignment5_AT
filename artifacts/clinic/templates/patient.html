@@ -301,6 +301,7 @@ Health{% endblock %} {% block nav_search %}
     font-weight: 600;
     color: var(--fg);
   }
+  .pm-reason-label { display: inline-flex; align-items: baseline; gap: 0.3rem; white-space: nowrap; }
   .pm-req { color: var(--muted-text); font-weight: 400; }
   .pm-form select, .pm-form textarea {
     font-family: inherit;
@@ -552,6 +553,22 @@ Health{% endblock %} {% block nav_search %}
     transition: color 0.15s, background 0.15s;
   }
   .mic-inline:hover { color: var(--primary); background: var(--muted-bg); }
+  .notebar-readonly { opacity: 0.85; }
+  .readonly-msg {
+    font-size: 0.8125rem;
+    color: var(--muted-text);
+    line-height: 1.5;
+    margin: 0.35rem 0 0;
+  }
+  .note-input-error {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.28);
+    color: var(--destructive);
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    margin-bottom: 0.6rem;
+  }
   .notebar textarea {
     width: 100%;
     min-height: 64px;
@@ -912,11 +929,15 @@ Health{% endblock %} {% block nav_search %}
   {% endif %}
 
   <!-- ══ NOTE CARD ══ -->
+  {% if is_doctor %}
   <div class="notebar">
     <form method="POST" action="/submit-note">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
       <input type="hidden" name="patient_id" value="{{ patient.id }}" />
       <div class="lbl">Add handoff note</div>
+      {% if summary and summary.input_error %}
+      <div class="note-input-error">{{ summary.input_error }}</div>
+      {% endif %}
       <div class="ta-wrap">
         <textarea
           name="note_content"
@@ -969,6 +990,15 @@ Health{% endblock %} {% block nav_search %}
       </div>
     </form>
   </div>
+  {% else %}
+  <div class="notebar notebar-readonly">
+    <div class="lbl">Add handoff note</div>
+    <p class="readonly-msg">
+      Handoff notes are written by the treating clinician. This account has
+      view-only access to the record.
+    </p>
+  </div>
+  {% endif %}
 
   <!-- ══ PATIENT RECORD ══ -->
   <div class="rec-div"><span>Patient Record</span></div>
@@ -1088,7 +1118,7 @@ Health{% endblock %} {% block nav_search %}
         </select>
       </label>
       <label class="pm-label">
-        Reason <span class="pm-req">(required)</span>
+        <span class="pm-reason-label">Reason <span class="pm-req">(required)</span></span>
         <textarea
           id="prioReason"
           name="reason"

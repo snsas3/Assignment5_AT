@@ -254,6 +254,30 @@ def get_latest_override(patient_id):
         return None
 
 
+def get_all_overrides():
+    """Every clinician priority override, newest first.
+
+    Used by the admin dashboard so that clinician corrections appear in the
+    activity log and are reflected in the priority distribution. Without
+    this, an override is invisible to admins because it is stored in
+    `priority_overrides`, not in `handoff_notes`.
+    """
+    sb = get_client()
+    if not sb:
+        return []
+    try:
+        resp = (
+            sb.table("priority_overrides")
+            .select("*")
+            .order("created_at", desc=True)
+            .execute()
+        )
+        return resp.data or []
+    except Exception as e:
+        print(f"get_all_overrides error: {e}")
+        return []
+
+
 def get_notes_text_by_patient():
     """One query -> {patient_id: 'all note text concatenated'}.
 
@@ -324,7 +348,9 @@ def _display_name(username):
 def get_admin_stats():
     sb = get_client()
     empty = {
+        "total_notes_submitted": 0,
         "total_patients_viewed": 0,
+        "total_overrides": 0,
         "total_summaries_generated": 0,
         "total_failed_generations": 0,
         "activity_log": [],
@@ -348,14 +374,18 @@ def get_admin_stats():
         failed = sum(1 for n in notes if not n.get("ai_summary"))
         generated = total - failed
 
-        activity = []
-        for n in notes[:12]:
-            created = n.get("created_at", "")
-            ts = created.replace("T", "  ")[:16] if created else ""
-            activity.append(
+        overrides = get_all_overrides()
+
+        # The activity log combines two event types so admins see the full
+        # picture: AI summary generations AND clinician priority corrections.
+        events = []
+        for n in notes:
+            events.append(
                 {
-                    "timestamp": ts,
+                    "created_at": n.get("created_at", ""),
+                    "timestamp": (n.get("created_at", "") or "").replace("T", "  ")[:16],
                     "doctor": _display_name(n.get("doctor_username", "")),
+                    "patient_id": n.get("patient_id", ""),
                     "patient": name_by_id.get(
                         n.get("patient_id"), n.get("patient_id", "—")
                     ),
@@ -365,6 +395,25 @@ def get_admin_stats():
                     "priority": n.get("priority_level", ""),
                 }
             )
+        for o in overrides:
+            events.append(
+                {
+                    "created_at": o.get("created_at", ""),
+                    "timestamp": (o.get("created_at", "") or "").replace("T", "  ")[:16],
+                    "doctor": _display_name(o.get("doctor_username", "")),
+                    "patient_id": o.get("patient_id", ""),
+                    "patient": name_by_id.get(
+                        o.get("patient_id"), o.get("patient_id", "—")
+                    ),
+                    "action": "Priority Adjusted",
+                    "priority": o.get("override_priority", ""),
+                    "detail": "System suggested {}".format(
+                        o.get("system_priority", "—")
+                    ),
+                }
+            )
+        events.sort(key=lambda e: e.get("created_at", ""), reverse=True)
+        activity = events[:15]
 
         daily = {}
         for n in notes:
@@ -403,7 +452,10 @@ def get_admin_stats():
             pb[lvl] = pb.get(lvl, 0) + 1
 
         return {
-            "total_patients_viewed": total,
+            # Renamed: this counts handoff notes submitted, not page views.
+            "total_notes_submitted": total,
+            "total_patients_viewed": total,  # kept for backwards compatibility
+            "total_overrides": len(overrides),
             "total_summaries_generated": generated,
             "total_failed_generations": failed,
             "activity_log": activity,
