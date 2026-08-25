@@ -17,7 +17,7 @@
   .stat-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted-text); margin-bottom: 0.45rem; }
   .stat-value { font-size: 2.125rem; font-weight: 700; line-height: 1; margin-bottom: 0.3rem; }
   .stat-card:nth-child(1) .stat-value { color: var(--secondary); }
-  .stat-card:nth-child(2) .stat-value { color: var(--primary); }
+  .stat-card:nth-child(2) .stat-value { color: var(--accent-warm); }
   .stat-card:nth-child(3) .stat-value { color: var(--destructive); }
   .stat-desc { font-size: 0.75rem; color: var(--muted-text); }
 
@@ -247,7 +247,7 @@
 
     function buildChart() {
       var ctx = document.getElementById('summaryChart').getContext('2d');
-      var primary    = cssVar('--primary');
+      var primary    = cssVar('--accent-warm-line');
       var cardBorder = cssVar('--card-border');
       var mutedText  = cssVar('--muted-text');
 

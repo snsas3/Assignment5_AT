@@ -117,6 +117,7 @@
     border-radius: 20px;
     white-space: nowrap;
   }
+  .sp-adj { margin-left: 0.28rem; font-size: 0.5rem; vertical-align: middle; opacity: 0.85; }
   .results-label {
     font-size: 0.7rem;
     font-weight: 700;
@@ -211,7 +212,10 @@
           <div class="patient-meta">{{ p.gender }} &middot; Age {{ p.age }} &middot; DOB {{ p.dob }}</div>
         </div>
         {% if p.priority %}
-        <span class="sp-prio" style="--pc: {{ p.priority_color }}">{{ p.priority }}</span>
+        <span class="sp-prio" style="--pc: {{ p.priority_color }}"
+              {% if p.priority_adjusted %}title="Clinician-adjusted from {{ p.priority_system }}"{% endif %}>
+          {{ p.priority }}{% if p.priority_adjusted %}<span class="sp-adj" aria-label="clinician adjusted">&#9679;</span>{% endif %}
+        </span>
         {% endif %}
         <svg class="result-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
       </a>

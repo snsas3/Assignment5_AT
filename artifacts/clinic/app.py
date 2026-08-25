@@ -753,18 +753,57 @@ def index():
         return redirect(url_for("admin"))
     patients = db.get_all_patients()
     notes_by_pt = db.get_notes_text_by_patient()
+    overrides = db.get_all_overrides()
+    eff = effective_priority_map(patients, notes_by_pt, overrides)
     rank = {"CRITICAL": 5, "HIGH": 4, "MEDIUM-HIGH": 3, "MEDIUM": 2, "LOW": 1}
     for p in patients:
-        rk = detect_risk_keywords(notes_by_pt.get(p["id"], ""))
-        prio = assign_priority(rk, p)
-        p["priority"] = prio["level"]
-        p["priority_color"] = prio["color"]
-        p["priority_rank"] = rank.get(prio["level"], 0)
+        e = eff.get(p["id"], {})
+        p["priority"] = e.get("level", "")
+        p["priority_color"] = e.get("color", "#6e6e6e")
+        p["priority_adjusted"] = e.get("adjusted", False)
+        p["priority_system"] = e.get("system_level", "")
+        p["priority_rank"] = rank.get(e.get("level"), 0)
     # Default sort: highest priority first
     patients.sort(key=lambda x: x.get("priority_rank", 0), reverse=True)
     return render_template(
         "search.html", patients=patients, username=session.get("username")
     )
+
+
+def effective_priority_map(patients, notes_by_pt, overrides):
+    """Current priority for every patient, with clinician overrides applied.
+
+    The system-assigned priority comes from the deterministic logic layer
+    (risk keywords + patient context). If a clinician has since overridden it,
+    their judgment wins — that is the whole point of the override feature.
+
+    This lives in one place because the same question is asked from three
+    different screens (search list, patient detail, admin dashboard), and
+    computing it separately in each is how the list and the detail page
+    drifted out of sync in the first place.
+    """
+    latest = {}
+    for o in overrides or []:  # get_all_overrides returns newest-first
+        latest.setdefault(o.get("patient_id"), o)
+
+    out = {}
+    for p in patients or []:
+        pid = p.get("id")
+        rk = detect_risk_keywords(notes_by_pt.get(pid, ""))
+        prio = assign_priority(rk, p)
+        level, color, adjusted = prio["level"], prio["color"], False
+        ov = latest.get(pid)
+        if ov and ov.get("override_priority"):
+            level = ov["override_priority"]
+            color = PRIORITY_COLORS.get(level, color)
+            adjusted = True
+        out[pid] = {
+            "level": level,
+            "color": color,
+            "adjusted": adjusted,
+            "system_level": prio["level"],
+        }
+    return out
 
 
 def _back_target():
@@ -825,22 +864,16 @@ def admin():
     patients = db.get_all_patients()
     notes_by_pt = db.get_notes_text_by_patient()
     overrides = db.get_all_overrides()
-
-    latest_override = {}
-    for o in overrides:  # already newest-first, so keep the first seen
-        latest_override.setdefault(o.get("patient_id"), o)
+    eff = effective_priority_map(patients, notes_by_pt, overrides)
 
     breakdown = {lvl: 0 for lvl in PRIORITY_LEVELS}
     adjusted = 0
     for p in patients:
-        rk = detect_risk_keywords(notes_by_pt.get(p["id"], ""))
-        level = assign_priority(rk, p)["level"]
-        ov = latest_override.get(p["id"])
-        if ov and ov.get("override_priority"):
-            level = ov["override_priority"]
+        e = eff.get(p["id"], {})
+        if e.get("adjusted"):
             adjusted += 1
-        if level in breakdown:
-            breakdown[level] += 1
+        if e.get("level") in breakdown:
+            breakdown[e["level"]] += 1
 
     stats["priority_breakdown"] = breakdown
     stats["priority_adjusted_count"] = adjusted
