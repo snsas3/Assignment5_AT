@@ -317,7 +317,7 @@ Health{% endblock %} {% block nav_search %}
   .pm-form textarea { min-height: 72px; resize: vertical; }
   .pm-form select:focus, .pm-form textarea:focus {
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(52,168,90,0.15);
+    box-shadow: 0 0 0 3px var(--focus-ring);
   }
   .pm-actions { display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 0.2rem; }
   .pm-actions .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
@@ -589,7 +589,7 @@ Health{% endblock %} {% block nav_search %}
   }
   .notebar textarea:focus {
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(52, 168, 90, 0.15);
+    box-shadow: 0 0 0 3px var(--focus-ring);
   }
   .notebar textarea::placeholder {
     color: var(--muted-text);

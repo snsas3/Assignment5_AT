@@ -74,7 +74,7 @@
   }
   #searchInput:focus {
     border-color: var(--primary);
-    box-shadow: 0 0 0 4px rgba(52,168,90,0.15), var(--shadow-md);
+    box-shadow: 0 0 0 4px var(--focus-ring), var(--shadow-md);
   }
   #searchInput::placeholder { color: var(--muted-text); }
   .search-hint {
@@ -142,7 +142,7 @@
   }
   .patient-result:hover {
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(52,168,90,0.1), var(--shadow);
+    box-shadow: 0 0 0 3px var(--focus-ring), var(--shadow);
     transform: translateY(-1px);
     text-decoration: none;
     color: var(--fg);
