@@ -12,7 +12,7 @@ paths = [ "/" ]
 localPort = 20964
 
 [services.development]
-run = "cd /home/runner/workspace/artifacts/clinic && exec python app.py"
+run = "cd /home/runner/workspace/artifacts/clinic && exec python -m waitress --host=0.0.0.0 --port=$PORT app:app"
 
 [services.env]
 PORT = "20964"
